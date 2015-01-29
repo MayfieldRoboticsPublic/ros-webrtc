@@ -109,9 +109,9 @@ class SignalSubscriber(object):
                     ordered=False,
                 ),
             ],
-            disconnect_service=rosgraph.names.ns_join(NAMESPACE, 'disconnect'),
-            ice_candidate_service=rosgraph.names.ns_join(NAMESPACE, 'ice_candidate'),
-            sdp_offer_answer_service=rosgraph.names.ns_join(NAMESPACE, 'sdp_offer_answer'),
+            disconnect_service='/my_project/disconnect'),
+            ice_candidate_service='/my_project/ice_candidate'),
+            sdp_offer_answer_service='/my_project/sdp_offer_answer'),
         )
     
     def _on_disconnect(self, channel, message):
