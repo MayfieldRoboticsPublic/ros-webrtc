@@ -33,9 +33,9 @@ It's up to you to e.g.:
 
 so typically your project will implement:
 
-- Ingress (from remote peer) signaling ROS service(s).
-- Egress (from local device) signaling ROS service(s)
-- Data-channel bridge as a ROS publisher/subscriber for moving data to/from remote peer and local device.
+- Ingress (from **remote peer**) signaling ROS service(s).
+- Egress (from **local device**) signaling ROS service(s)
+- Data-channel bridge as a ROS publisher/subscriber for moving data to/from **remote peer** and **local device**.
 
 then:
 
@@ -159,10 +159,10 @@ session:
     optional: {DtlsSrtpKeyAgreement: 'true'}
 ```
 
-All other configuration is per-session and passed to `device` via `ros_webrtc`
+all other configuration is per-session and passed to `device` via `ros_webrtc`
 services:
 
-- `srv/Connect.srv`.
-- `srv/Disconnect.srv`.
-- `srv/IceCandidate.srv`.
-- `srv/SdpOfferAnswer.srv`.
+- `srv/Connect.srv`
+- `srv/Disconnect.srv`
+- `srv/IceCandidate.srv`
+- `srv/SdpOfferAnswer.srv`
