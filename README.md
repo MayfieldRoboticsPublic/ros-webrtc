@@ -3,11 +3,11 @@ ros-webrtc
 
 ROS node for managing [WebRTC](http://www.webrtc.org/):
 
-- *audio*
-- *video*
-- *data*
+- **audio**
+- **video**
+- **data**
 
-per-session sessions using [Google's implementation](https://code.google.com/p/libjingle/).
+streaming sessions using [Google's implementation](https://code.google.com/p/libjingle/).
 
 dev
 ===
@@ -23,12 +23,15 @@ usage
 =====
 
 `ros-webrtc` intentionally exposes **only** use-case agnostic WebRTC
-functionality. It up to you to e.g.:
+functionality.
+
+
+It's up to you to e.g.:
 
 - Describe the session you want (e.g. video and audio tracks, data channels, etc).
 - Coordinate signaling (e.g. ICE and SDP message exchange, etc).
 
-Typically your project will implement:
+so typically your project will implement:
 
 - Ingress (from remote peer) signaling ROS service(s).
 - Egress (from local device) signaling ROS service(s)
@@ -38,7 +41,9 @@ then:
 
 - Register `ros-webrtc` as a `<build_depend/>` and `<run_depend/>`.
 
-and that's it. So e.g. here's an **ingress** signaling implementation linking
+and that's it.
+
+Here's e.g. of an **ingress** signaling implementation linking
 [pubnub](http://www.pubnub.com/) signals to the corresponding `ros_webrtc` ROS
 service(s):
 
@@ -83,7 +88,7 @@ class SignalSubscriber(object):
             elif message['type'] == 'sdp_offeranswer':
                 handler = self._on_sdp_offeranswer
             else:
-                rospy.logwarn('pubnub @ %s has unsupported "type" - %s', channel, message)
+                rospy.loginfo('pubnub @ %s has unsupported "type" - %s', channel, message)
                 return
             handler(channel, message)
         except Exception, ex:
@@ -128,24 +133,12 @@ class SignalSubscriber(object):
             type=message['payload']['type'],
             sdp=message['payload']['sdp'],
         )
-        
-    def error(self, message):
-        rospy.loginfo('pubnub error - %s', message)
-    
-    def connect(self, message):
-        rospy.loginfo('pubnub connected - %s', message)
-    
-    def reconnect(self, message):
-        rospy.loginfo('pubnub reconnected - %s', message)
-    
-    def disconnect(self, message):
-        rospy.loginfo('pubnub disconnected - %s', message)
 ```
 
 device
 ------
 
-The `device` exposes all WebRTC functionality:
+This ROS node exposes all WebRTC functionality:
 
 ```bash
 $ rosrun ros_webrtc device
@@ -166,5 +159,10 @@ session:
     optional: {DtlsSrtpKeyAgreement: 'true'}
 ```
 
-all other configuration is per-session and passed when beginning a session via
-`srv/Connect.srv`.
+All other configuration is per-session and passed to `device` via `ros_webrtc`
+services:
+
+- `srv/Connect.srv`.
+- `srv/Disconnect.srv`.
+- `srv/IceCandidate.srv`.
+- `srv/SdpOfferAnswer.srv`.
