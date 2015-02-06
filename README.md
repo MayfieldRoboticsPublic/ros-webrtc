@@ -25,7 +25,6 @@ usage
 `ros-webrtc` intentionally exposes **only** use-case agnostic WebRTC
 functionality.
 
-
 It's up to you to e.g.:
 
 - Describe the session you want (e.g. video and audio tracks, data channels, etc).

@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(PkgConfig REQUIRED COMPONENTS system)
 
 ## System dependencies also found via PkgConfig's conventions
-pkg_check_modules(jingle REQUIRED jingle)
+pkg_check_modules(jingle REQUIRED libjingle)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -113,6 +113,7 @@ include_directories(
 foreach(cxx_flag ${jingle_CFLAGS})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${cxx_flag}")
 endforeach(cxx_flag)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 ## Declare a cpp library
 # add_library(ros_webrtc
