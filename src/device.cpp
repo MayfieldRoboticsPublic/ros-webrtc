@@ -68,34 +68,7 @@ Device::~Device() {
 
 bool Device::open() {
     _dc_rpub = _nh.advertise<ros_webrtc::Data>(topic_for("data_recv"), 1000, false);
-
-    _worker_thd.reset(new rtc::Thread());
-    _worker_thd->SetName("worker_thread", NULL);
-    if (!_worker_thd->Start()) {
-        ROS_DEBUG_STREAM("worker thread failed to start");
-        close();
-        return false;
-    }
-
-    _signaling_thd.reset(new rtc::Thread());
-    _signaling_thd->SetName("signaling_thread", NULL);
-    if (!_signaling_thd->Start()) {
-        ROS_DEBUG_STREAM("signaling thread failed to start");
-        close();
-        return false;
-    }
-
-    rtc::scoped_ptr<cricket::WebRtcVideoEncoderFactory> encoder_factory;
-    rtc::scoped_ptr<cricket::WebRtcVideoDecoderFactory> decoder_factory;
-    _pc_factory =  webrtc::CreatePeerConnectionFactory(
-        _worker_thd.get(),
-        _signaling_thd.get(),
-        NULL,
-        encoder_factory.release(),
-        decoder_factory.release()
-    );
-    if (!_pc_factory.get()) {
-        ROS_DEBUG_STREAM("failed peer-connection factory create");
+    if (!_create_pc_factory()) {
         close();
         return false;
     }
@@ -187,6 +160,41 @@ SessionConstPtr Device::session(const std::string& peer_id) const {
     return SessionConstPtr();
 }
 
+bool Device::_create_pc_factory() {
+    _worker_thd.reset(new rtc::Thread());
+    _worker_thd->SetName("worker_thread", NULL);
+    if (!_worker_thd->Start()) {
+        ROS_DEBUG_STREAM("worker thread failed to start");
+        close();
+        return false;
+    }
+
+    _signaling_thd.reset(new rtc::Thread());
+    _signaling_thd->SetName("signaling_thread", NULL);
+    if (!_signaling_thd->Start()) {
+        ROS_DEBUG_STREAM("signaling thread failed to start");
+        close();
+        return false;
+    }
+
+    rtc::scoped_ptr<cricket::WebRtcVideoEncoderFactory> encoder_factory;
+    rtc::scoped_ptr<cricket::WebRtcVideoDecoderFactory> decoder_factory;
+    _pc_factory =  webrtc::CreatePeerConnectionFactory(
+        _worker_thd.get(),
+        _signaling_thd.get(),
+        NULL,
+        encoder_factory.release(),
+        decoder_factory.release()
+    );
+    if (!_pc_factory.get()) {
+        ROS_DEBUG_STREAM("failed peer-connection factory create");
+        close();
+        return false;
+    }
+
+    return true;
+}
+
 bool Device::_open_local_stream() {
     // stream
     std::stringstream ss;
@@ -247,12 +255,6 @@ bool Device::_open_local_stream() {
             video_label = ss.str();
             ss.str("");
             ss.clear();
-        }
-        for (MediaConstraints::Constraints::iterator j = _video_constraints[i].mandatory().begin();
-             j != _video_constraints[i].mandatory().end();
-             j++
-             ) {
-            ROS_ERROR_STREAM((*j).key << " " << (*j).value);
         }
         rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
             _pc_factory->CreateVideoTrack(

@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
     ROS_INFO_STREAM("initializing ssl");
     if (!rtc::InitializeSSL()) {
         ROS_ERROR_STREAM("ssl initialization failed");
-        exit(1);
+        return 1;
     }
 
     ROS_INFO_STREAM("creating device");
@@ -38,7 +38,10 @@ int main(int argc, char **argv) {
     Device device(device_factory());
 
     ROS_INFO_STREAM("opening device ... ");
-    device.open();
+    if (!device.open()) {
+        ROS_INFO_STREAM("device open failed");
+        return 2;
+    }
     ROS_INFO_STREAM("opened device");
 
     ROS_INFO_STREAM("start spinning");

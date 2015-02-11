@@ -86,6 +86,8 @@ public:
 
 private:
 
+    bool _create_pc_factory();
+
     bool _open_local_stream();
 
     void _close_local_stream();
