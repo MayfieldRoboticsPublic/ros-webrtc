@@ -142,6 +142,10 @@ private:
 
     std::vector<webrtc::PeerConnectionInterface::IceServer> _ice_servers;
 
+    rtc::scoped_ptr<rtc::Thread> _signaling_thd;
+
+    rtc::scoped_ptr<rtc::Thread> _worker_thd;
+
     rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> _pc_factory;
 
     rtc::scoped_refptr<webrtc::MediaStreamInterface> _local_stream;

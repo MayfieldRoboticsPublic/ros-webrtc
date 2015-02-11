@@ -3,6 +3,8 @@
 #include <talk/app/webrtc/peerconnectioninterface.h>
 #include <talk/app/webrtc/videosourceinterface.h>
 #include <talk/media/devices/devicemanager.h>
+#include <talk/media/webrtc/webrtcvideoencoderfactory.h>
+#include <talk/media/webrtc/webrtcvideodecoderfactory.h>
 
 #include "util.h"
 
@@ -66,7 +68,32 @@ Device::~Device() {
 
 bool Device::open() {
     _dc_rpub = _nh.advertise<ros_webrtc::Data>(topic_for("data_recv"), 1000, false);
-    _pc_factory =  webrtc::CreatePeerConnectionFactory();
+
+    _worker_thd.reset(new rtc::Thread());
+    _worker_thd->SetName("worker_thread", NULL);
+    if (!_worker_thd->Start()) {
+        ROS_DEBUG_STREAM("worker thread failed to start");
+        close();
+        return false;
+    }
+
+    _signaling_thd.reset(new rtc::Thread());
+    _signaling_thd->SetName("signaling_thread", NULL);
+    if (!_signaling_thd->Start()) {
+        ROS_DEBUG_STREAM("signaling thread failed to start");
+        close();
+        return false;
+    }
+
+    rtc::scoped_ptr<cricket::WebRtcVideoEncoderFactory> encoder_factory;
+    rtc::scoped_ptr<cricket::WebRtcVideoDecoderFactory> decoder_factory;
+    _pc_factory =  webrtc::CreatePeerConnectionFactory(
+        _worker_thd.get(),
+        _signaling_thd.get(),
+        NULL,
+        encoder_factory.release(),
+        decoder_factory.release()
+    );
     if (!_pc_factory.get()) {
         ROS_DEBUG_STREAM("failed peer-connection factory create");
         close();
@@ -91,6 +118,8 @@ void Device::close() {
     _close_servers();
     _close_local_stream();
     _pc_factory.release();
+    _worker_thd.reset();
+    _signaling_thd.reset();
     _dc_rpub.shutdown();
 }
 

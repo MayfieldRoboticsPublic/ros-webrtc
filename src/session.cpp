@@ -176,19 +176,19 @@ bool Session::_open_service_clients() {
     if (_service_names.find("disconnect") == _service_names.end()) {
         return false;
     }
-    ROS_ERROR_STREAM("peer " << _peer_id << " 'disconnect' service '" <<  _service_names["disconnect"] << "'");
+    ROS_INFO_STREAM("peer " << _peer_id << " 'disconnect' service '" <<  _service_names["disconnect"] << "'");
     _service_clis["disconnect"] = _nh.serviceClient<ros_webrtc::Disconnect>(_service_names["disconnect"]);
 
     if (_service_names.find("ice_candidate") == _service_names.end()) {
         return false;
     }
-    ROS_ERROR_STREAM("peer " << _peer_id << " 'ice_candidate' service '" <<  _service_names["ice_candidate"] << "'");
+    ROS_INFO_STREAM("peer " << _peer_id << " 'ice_candidate' service '" <<  _service_names["ice_candidate"] << "'");
     _service_clis["ice_candidate"] = _nh.serviceClient<ros_webrtc::IceCandidate>(_service_names["ice_candidate"]);
 
     if (_service_names.find("sdp_offer_answer") == _service_names.end()) {
         return false;
     }
-    ROS_ERROR_STREAM("peer " << _peer_id << " 'sdp_offer_answer' service '" <<  _service_names["sdp_offer_answer"] << "'");
+    ROS_INFO_STREAM("peer " << _peer_id << " 'sdp_offer_answer' service '" <<  _service_names["sdp_offer_answer"] << "'");
     _service_clis["sdp_offer_answer"] = _nh.serviceClient<ros_webrtc::SdpOfferAnswer>(_service_names["sdp_offer_answer"]);
 
     return true;
