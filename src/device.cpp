@@ -8,28 +8,46 @@
 
 #include "util.h"
 
+
+// DeviceVideoSource
+
+DeviceVideoSource::DeviceVideoSource() : publish(false) {
+}
+
+DeviceVideoSource::DeviceVideoSource(
+    const std::string& name_,
+    const std::string& label_,
+    const MediaConstraints& constraints_,
+    bool publish_
+    ) :
+    name(name_),
+    label(label_),
+    constraints(constraints_),
+    publish (publish_) {
+}
+
+
+// DeviceAudioSource
+
+DeviceAudioSource::DeviceAudioSource() : publish(false) {
+}
+
+DeviceAudioSource::DeviceAudioSource(
+    const std::string& label_,
+    const MediaConstraints& constraints_,
+    bool publish_
+    ) :
+    label(label_),
+    constraints(constraints_),
+    publish (publish_) {
+}
+
 // DeviceFactory
-
-void DeviceFactory::add_video(
-    const std::string& name,
-    const std::string& label,
-    const MediaConstraints& constraints
-    ) {
-    video_srcs.push_back(name);
-    video_labels.push_back(label);
-    video_constraints.push_back(constraints);
-}
-
-void DeviceFactory::add_ice_server(const webrtc::PeerConnectionInterface::IceServer& ice_server) {
-    ice_servers.push_back(ice_server);
-}
 
 Device DeviceFactory::operator()() {
     return Device(
         video_srcs,
-        video_labels,
-        video_constraints,
-        audio_constraints,
+        audio_src,
         session_constraints,
         ice_servers
     );
@@ -38,26 +56,20 @@ Device DeviceFactory::operator()() {
 // Device
 
 Device::Device(
-    const std::vector<std::string>& video_srcs,
-    const std::vector<std::string>& video_labels,
-    const std::vector<MediaConstraints>& video_constraints,
-    const MediaConstraints& audio_constraints,
+    const std::vector<DeviceVideoSource>& video_srcs,
+    const DeviceAudioSource& audio_src,
     const MediaConstraints& session_constraints,
     const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers
     ) :
     _video_srcs(video_srcs),
-    _video_labels(video_labels),
-    _video_constraints(video_constraints),
-    _audio_constraints(audio_constraints),
+    _audio_src(audio_src),
     _session_constraints(session_constraints),
     _ice_servers(ice_servers) {
 }
 
 Device::Device(const Device& other) :
     _video_srcs(other._video_srcs),
-    _video_labels(other._video_labels),
-    _video_constraints(other._video_constraints),
-    _audio_constraints(other._audio_constraints),
+    _audio_src(other._audio_src),
     _session_constraints(other._session_constraints),
     _ice_servers(other._ice_servers) {
 }
@@ -205,7 +217,7 @@ bool Device::_open_local_stream() {
     _local_stream = _pc_factory->CreateLocalMediaStream(stream_label);
 
     // audio track
-    std::string audio_label = _audio_label;
+    std::string audio_label = _audio_src.label;
     if (audio_label.empty()) {
         ss << "a" << 1;
         audio_label = ss.str();
@@ -214,18 +226,20 @@ bool Device::_open_local_stream() {
     }
     rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
         _pc_factory->CreateAudioTrack(
-           audio_label, _pc_factory->CreateAudioSource(&_audio_constraints)
+           audio_label, _pc_factory->CreateAudioSource(&_audio_src.constraints)
         )
     );
     if(audio_track.get() == NULL) {
         ROS_ERROR_STREAM("cannot create track '" << audio_label << "'");
         return false;
     }
-    _audio_sink.reset(new AudioSink(
-        _nh,
-        topic_for("local", "audio_" + audio_track->id()),
-        audio_track
-    ));
+    if (_audio_src.publish) {
+        _audio_sink.reset(new AudioSink(
+            _nh,
+            topic_for("local", "audio_" + audio_track->id()),
+            audio_track
+        ));
+    }
     _local_stream->AddTrack(audio_track);
 
     // video tracks
@@ -236,20 +250,22 @@ bool Device::_open_local_stream() {
         return false;
     }
     for (size_t i = 0; i != _video_srcs.size(); i++) {
+        const DeviceVideoSource& video_src = _video_srcs[i];
+
         // capturer
         cricket::Device video_device;
-        if (!dev_mgr->GetVideoCaptureDevice(_video_srcs[i], &video_device)) {
-            ROS_ERROR_STREAM("cannot get video capture device for '" << _video_srcs[i] << "'");
+        if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &video_device)) {
+            ROS_ERROR_STREAM("cannot get video capture device for '" << video_src.name << "'");
             return false;
         }
         cricket::VideoCapturer* video_capturer = dev_mgr->CreateVideoCapturer(video_device);
         if (video_capturer == NULL) {
-            ROS_ERROR_STREAM("cannot cast video capture device for '" << _video_srcs[i] << "'");
+            ROS_ERROR_STREAM("cannot cast video capture device for '" << video_src.name << "'");
             return false;
         }
 
         // track
-        std::string video_label = _video_labels[i];
+        std::string video_label = video_src.label;
         if (video_label.empty()) {
             ss << "v" << i + 1;
             video_label = ss.str();
@@ -258,19 +274,21 @@ bool Device::_open_local_stream() {
         }
         rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
             _pc_factory->CreateVideoTrack(
-                video_label, _pc_factory->CreateVideoSource(video_capturer, &_video_constraints[i])
+                video_label, _pc_factory->CreateVideoSource(video_capturer, &video_src.constraints)
             )
         );
         if(video_track.get() == NULL) {
-            ROS_ERROR_STREAM("cannot create track '" << video_label << "' for video capture device '" << _video_srcs[i] << "'");
+            ROS_ERROR_STREAM("cannot create track '" << video_label << "' for video capture device '" << video_src.name << "'");
             return false;
         }
-        VideoRendererPtr video_renderer(new VideoRenderer(
-            _nh,
-            topic_for("local", "video_" + video_track->id()),
-            video_track
-        ));
-        _video_renderers.push_back(video_renderer);
+        if (video_src.publish) {
+            VideoRendererPtr video_renderer(new VideoRenderer(
+                _nh,
+                topic_for("local", "video_" + video_track->id()),
+                video_track
+            ));
+            _video_renderers.push_back(video_renderer);
+        }
         _local_stream->AddTrack(video_track);
     }
 

@@ -22,17 +22,12 @@ int main(int argc, char **argv) {
 
     ROS_INFO_STREAM("creating device");
     DeviceFactory device_factory;
-    device_factory.audio_label = config.microphone.label;
-    device_factory.audio_constraints = config.microphone.constraints;
-    for(Config::Cameras::iterator i = config.cameras.begin(); i != config.cameras.end(); i++) {
-        device_factory.add_video(
-            (*i).second.name,
-            (*i).second.label,
-            (*i).second.constraints
-        );
+    device_factory.audio_src = config.microphone;
+    for(size_t i = 0; i != config.cameras.size(); i++) {
+        device_factory.video_srcs.push_back(config.cameras[i]);
     }
-    for(Config::IceServers::iterator i = config.ice_servers.begin(); i != config.ice_servers.end(); i++) {
-        device_factory.add_ice_server(*(i));
+    for(size_t i = 0; i != config.ice_servers.size(); i++) {
+        device_factory.ice_servers.push_back(config.ice_servers[i]);
     }
     device_factory.session_constraints = config.session_constraints;
     Device device(device_factory());

@@ -12,25 +12,53 @@
 #include "media_constraints.h"
 #include "session.h"
 
-class DeviceFactory {
 
-public:
+struct DeviceVideoSource {
 
-    void add_video(const std::string& name, const std::string& label, const MediaConstraints& constraints);
+    DeviceVideoSource();
 
-    void add_ice_server(const webrtc::PeerConnectionInterface::IceServer& ice_server);
+    DeviceVideoSource(
+        const std::string& name,
+        const std::string& label,
+        const MediaConstraints& constraints,
+        bool publish = false
+    );
+
+    std::string name;
+
+    std::string label;
+
+    MediaConstraints constraints;
+
+    bool publish;
+
+};
+
+struct DeviceAudioSource {
+
+    DeviceAudioSource();
+
+    DeviceAudioSource(
+        const std::string& label,
+        const MediaConstraints& constraints,
+        bool publish = false
+    );
+
+    std::string label;
+
+    MediaConstraints constraints;
+
+    bool publish;
+
+};
+
+struct DeviceFactory {
 
     Device operator()();
 
-    std::vector<std::string> video_srcs;
+    std::vector<DeviceVideoSource> video_srcs;
 
-    std::vector<std::string> video_labels;
-
-    std::vector<MediaConstraints> video_constraints;
-
-    std::string audio_label;
-
-    MediaConstraints audio_constraints;
+    DeviceAudioSource audio_src;
 
     MediaConstraints session_constraints;
 
@@ -43,10 +71,8 @@ class Device {
 public:
 
     Device(
-        const std::vector<std::string>& video_srcs,
-        const std::vector<std::string>& video_labels,
-        const std::vector<MediaConstraints>& video_constraints,
-        const MediaConstraints& audio_constraints,
+        const std::vector<DeviceVideoSource>& video_srcs,
+        const DeviceAudioSource& audio_src,
         const MediaConstraints& session_constraints,
         const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers
     );
@@ -132,13 +158,9 @@ private:
 
     ros::NodeHandle _nh;
 
-    std::vector<std::string> _video_srcs;
+    std::vector<DeviceVideoSource> _video_srcs;
 
-    std::vector<std::string> _video_labels;
-
-    std::vector<MediaConstraints> _video_constraints;
-
-    MediaConstraints _audio_constraints;
+    DeviceAudioSource _audio_src;
 
     MediaConstraints _session_constraints;
 

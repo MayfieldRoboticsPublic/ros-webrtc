@@ -4,6 +4,7 @@
 #include <ros/ros.h>
 #include <talk/app/webrtc/peerconnectioninterface.h>
 
+#include "device.h"
 #include "media_constraints.h"
 
 /*
@@ -46,35 +47,9 @@ public:
      */
     void set();
 
-    /**
-     * @struct Camera
-     * @brief Video input device.
-     */
-    struct Camera {
+    std::vector<DeviceVideoSource> cameras; /*! Video input devices. */
 
-        std::string name;
-        std::string label;
-        MediaConstraints constraints;
-
-    };
-
-    typedef std::map<std::string, Camera> Cameras;
-
-    /**
-     * @struct Microphone
-     * @brief Audio input device.
-     */
-    struct Microphone {
-
-        std::string name;
-        std::string label;
-        MediaConstraints constraints;
-
-    };
-
-    Cameras cameras; /*! Video input devices. */
-
-    Microphone microphone; /*! Single audio input device. */
+    DeviceAudioSource microphone; /*! Single audio input device. */
 
     MediaConstraints session_constraints; /*! Session media constraints. */
 
@@ -84,13 +59,13 @@ public:
 
 private:
 
-    static bool _get(ros::NodeHandle& nh, const std::string& root, Camera& value);
+    static bool _get(ros::NodeHandle& nh, const std::string& root, DeviceVideoSource& value);
 
-    static void _set(ros::NodeHandle& nh, const std::string& root, const Camera& value);
+    static void _set(ros::NodeHandle& nh, const std::string& root, const DeviceVideoSource& value);
 
-    static bool _get(ros::NodeHandle& nh, const std::string& root, Microphone& value);
+    static bool _get(ros::NodeHandle& nh, const std::string& root, DeviceAudioSource& value);
 
-    static void _set(ros::NodeHandle& nh, const std::string& root, const Microphone& value);
+    static void _set(ros::NodeHandle& nh, const std::string& root, const DeviceAudioSource& value);
 
     static bool _get(ros::NodeHandle& nh, const std::string& root, MediaConstraints& value);
 

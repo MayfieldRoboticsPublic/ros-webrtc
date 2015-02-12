@@ -11,9 +11,9 @@ Config Config::get() {
     XmlRpc::XmlRpcValue cameras_xml;
     if (nh.getParam(param_for("cameras/"), cameras_xml)) {
         for (XmlRpc::XmlRpcValue::iterator i = cameras_xml.begin(); i != cameras_xml.end(); i++) {
-            Camera camera;
+            DeviceVideoSource camera;
             if (_get(nh, ros::names::append(param_for("cameras/"), (*i).first), camera)) {
-                instance.cameras.insert(Cameras::value_type((*i).first, camera));
+                instance.cameras.push_back(camera);
             }
         }
     } else {
@@ -46,8 +46,8 @@ void Config::set() {
     ros::NodeHandle nh;
 
     // cameras
-    for(Cameras::const_iterator i = cameras.begin(); i != cameras.end(); i++) {
-        _set(nh, ros::names::append("webrtc/cameras", (*i).first), (*i).second);
+    for(size_t i = 0; i != cameras.size(); i++) {
+        _set(nh, ros::names::append("webrtc/cameras", cameras[i].name), cameras[i]);
     }
 
     // microphone
@@ -65,7 +65,7 @@ void Config::set() {
     }
 }
 
-bool Config::_get(ros::NodeHandle& nh, const std::string& root, Config::Camera& value) {
+bool Config::_get(ros::NodeHandle& nh, const std::string& root, DeviceVideoSource& value) {
     if (!nh.getParam(ros::names::append(root, "name"), value.name)) {
         return false;
     }
@@ -73,30 +73,29 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, Config::Camera& 
     if (!_get(nh, ros::names::append(root, "constraints"), value.constraints)) {
         return false;
     }
+    nh.getParam(ros::names::append(root, "publish"), value.publish);
     return true;
 }
 
-void Config::_set(ros::NodeHandle& nh, const std::string& root, const Camera& value) {
-    nh.setParam(ros::names::append(root, "name"), value.name);
+void Config::_set(ros::NodeHandle& nh, const std::string& root, const DeviceVideoSource& value) {
     nh.setParam(ros::names::append(root, "label"), value.label);
     _set(nh, ros::names::append(root, "constraints"), value.constraints);
+    nh.setParam(ros::names::append(root, "publish"), value.publish);
 }
 
-bool Config::_get(ros::NodeHandle& nh, const std::string& root, Microphone& value) {
-    if (!nh.getParam(ros::names::append(root, "name"), value.name)) {
-        return false;
-    }
+bool Config::_get(ros::NodeHandle& nh, const std::string& root, DeviceAudioSource& value) {
     nh.getParam(ros::names::append(root, "label"), value.label);
     if (!_get(nh, ros::names::append(root, "constraints"), value.constraints)) {
         return false;
     }
+    nh.getParam(ros::names::append(root, "publish"), value.publish);
     return true;
 }
 
-void Config::_set(ros::NodeHandle& nh, const std::string& root, const Microphone& value) {
-    nh.setParam(ros::names::append(root, "name"), value.name);
+void Config::_set(ros::NodeHandle& nh, const std::string& root, const DeviceAudioSource& value) {
     nh.setParam(ros::names::append(root, "label"), value.label);
     _set(nh, ros::names::append(root, "constraints"), value.constraints);
+    nh.setParam(ros::names::append(root, "publish"), value.publish);
 }
 
 bool Config::_get(ros::NodeHandle& nh, const std::string& root, MediaConstraints& value) {
