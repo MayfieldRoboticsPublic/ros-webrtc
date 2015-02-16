@@ -39,6 +39,14 @@ Config Config::get() {
         ROS_INFO_STREAM("missing 'ice_servers/' param");
     }
 
+    // flush_frequency
+    instance.flush_frequency = 10 * 60;  // 10 minutes
+    if (nh.hasParam(param_for("flush_frequency"))) {
+        if (!nh.getParam(param_for("flush_frequency"), instance.flush_frequency)) {
+            ROS_INFO_STREAM("'flush_frequency' param type not int");
+        }
+    }
+
     return instance;
 }
 

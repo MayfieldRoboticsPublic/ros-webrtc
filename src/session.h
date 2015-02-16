@@ -38,7 +38,7 @@ public:
         webrtc::MediaStreamInterface* local_stream,
         const MediaConstraints& sdp_constraints,
         ros::Publisher& dc_rpub,
-        const std::vector<ros_webrtc::DataChannel>& dc_inits,
+        const std::vector<ros_webrtc::DataChannel>& dc_confs,
         const std::map<std::string, std::string>& service_names
     );
 
@@ -86,7 +86,7 @@ public:
 
     bool connect();
 
-    void create_offer();
+    bool create_offer();
 
     bool is_offerer();
 
@@ -96,11 +96,61 @@ public:
 
     void set_remote_session_description(webrtc::SessionDescriptionInterface* sdp);
 
-    webrtc::DataChannelInterface* data_channel(const std::string& label);
+    class DataChannel {
 
-    const webrtc::DataChannelInterface* data_channel(const std::string& label) const;
+    public:
+
+        DataChannel(const ros_webrtc::DataChannel& conf);
+
+        void send(webrtc::DataBuffer& data_buffer, bool transfer=true);
+
+        const ros_webrtc::DataChannel conf;
+
+        rtc::scoped_refptr<webrtc::DataChannelInterface> provider;
+
+        typedef std::list<boost::shared_ptr<DataObserver>> Observers;
+
+        Observers observers;
+
+    };
+
+    DataChannel* data_channel(const std::string& label);
+
+    const DataChannel* data_channel(const std::string& label) const;
+
+    struct Flush {
+
+        size_t reaped_data_messages;
+
+    };
+
+    Flush flush();
 
 private:
+
+    struct ChunkedDataTransfer {
+
+        ChunkedDataTransfer(
+            const std::string& id,
+            const webrtc::DataBuffer& data_buffer,
+            size_t size
+        );
+
+        bool is_complete() const;
+
+        size_t send(webrtc::DataChannelInterface* provider);
+
+        const std::string id;
+
+        const rtc::Buffer& data;
+
+        const size_t size;
+
+        const size_t total;
+
+        size_t current;
+
+    };
 
     bool _open_peer_connection(
         webrtc::PeerConnectionFactoryInterface* pc_factory,
@@ -230,9 +280,7 @@ private:
 
     typedef std::vector<ros_webrtc::DataChannel> DataChannelInits;
 
-    DataChannelInits _dc_inits;
-
-    typedef std::vector<rtc::scoped_refptr<webrtc::DataChannelInterface> > DataChannels;
+    typedef std::vector<DataChannel> DataChannels;
 
     DataChannels _dcs;
 
@@ -249,8 +297,6 @@ private:
     typedef std::list<VideoRendererPtr> VideoRenderers;
 
     VideoRenderers _video_renderers;
-
-    std::list<DataObserverPtr> _data_observers;
 };
 
 typedef boost::shared_ptr<Session> SessionPtr;

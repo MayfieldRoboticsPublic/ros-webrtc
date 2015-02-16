@@ -57,6 +57,8 @@ public:
 
     IceServers ice_servers; /*! Servers to use for ICE. */
 
+    int flush_frequency; /*! Number of seconds between device/session flushes . */
+
 private:
 
     static bool _get(ros::NodeHandle& nh, const std::string& root, DeviceVideoSource& value);

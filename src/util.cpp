@@ -2,6 +2,9 @@
 
 #include <cctype>
 
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <boost/uuid/random_generator.hpp>
 #include <ros/ros.h>
 
 std::string normalize_name(const std::string& name) {
@@ -42,4 +45,9 @@ std::string param_for(const std::string& name) {
     return ros::names::append(
         "ros_webrtc", normalize_name(name)
     );
+}
+
+std::string generate_id() {
+    boost::uuids::uuid uuid = boost::uuids::random_generator()();
+    return boost::lexical_cast<std::string>(uuid);
 }

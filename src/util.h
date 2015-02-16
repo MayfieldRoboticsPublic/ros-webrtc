@@ -38,4 +38,10 @@ std::string topic_for(const std::string& name);
  */
 std::string param_for(const std::string& name);
 
+/**
+ * @brief Generates a unique id.
+ * @return The unique id as a string.
+ */
+std::string generate_id();
+
 #endif /* WEBRTC_UTIL_H_ */

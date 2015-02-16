@@ -1,5 +1,6 @@
 #include "renderer.h"
 
+#include <json/json.h>
 #include <sensor_msgs/image_encodings.h>
 #include <talk/media/base/videocommon.h>
 #include <talk/media/base/videoframe.h>
@@ -110,13 +111,26 @@ void DataObserver::OnStateChange() {
     ROS_INFO_STREAM("data state change for '" << _data_channel->label() << "' to '" << _data_channel->state() << "'");
 }
 
-void DataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
+// UnchunkedDataObserver
+
+UnchunkedDataObserver::UnchunkedDataObserver(
+    ros::Publisher& rpub,
+    webrtc::DataChannelInterface* data_channel
+    ) : DataObserver(rpub, data_channel) {
+}
+
+size_t UnchunkedDataObserver::reap() {
+    return 0;
+}
+
+void UnchunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     ROS_INFO_STREAM(
         "data message for '" << _data_channel->label() << "' - "
         << "binary=" << buffer.binary << ", "
         << "size=" << buffer.data.length()
     );
     ros_webrtc::Data msg;
+    msg.label = _data_channel->label();
     msg.encoding = buffer.binary ? "utf-8" : "binary";
     msg.buffer.insert(
         msg.buffer.end(),
@@ -124,4 +138,149 @@ void DataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
         buffer.data.data() + buffer.data.length()
     );
     _rpub.publish(msg);
+}
+
+// ChunkedDataObserver
+
+ChunkedDataObserver::ChunkedDataObserver(
+    ros::Publisher& rpub,
+    webrtc::DataChannelInterface* data_channel
+    ) : DataObserver(rpub, data_channel) {
+}
+
+size_t ChunkedDataObserver::reap() {
+    size_t count = 0;
+    Messages::iterator i = _messages.begin();
+    while (i != _messages.end()) {
+        if ((*i).second->is_expired()) {
+            ROS_WARN_STREAM(
+                "data message for '" << _data_channel->label()
+                << "' w/" << " id "  << (*i).second->id << " expired @" << (*i).second->expires_at
+                << ", discarding ... "
+            );
+            count++;
+            _messages.erase(i++);  // http://stackoverflow.com/a/596180
+        } else {
+            i++;
+        }
+    }
+    return count;
+}
+
+void ChunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
+    ROS_INFO_STREAM(
+        "data message for '" << _data_channel->label() << "' - "
+        << "binary=" << buffer.binary << ", "
+        << "size=" << buffer.data.length()
+    );
+
+    // deserialize chunk
+    Json::Value chunk;
+    Json::Reader reader;
+    bool parsingSuccessful = reader.parse(
+        buffer.data.data(),
+        buffer.data.data() + buffer.data.length(),
+        chunk
+    );
+    if (!parsingSuccessful) {
+        ROS_WARN_STREAM(
+            "data message for '" << _data_channel->label() << "' malformed - "
+            << reader.getFormattedErrorMessages()
+        );
+        return;
+    }
+
+    // validate chunk
+    // TODO: use json schema
+    if (!chunk.isMember("id") || !chunk["id"].isString() ||
+        !chunk.isMember("total") || !chunk["total"].isUInt() ||
+        !chunk.isMember("index") || !chunk["index"].isUInt() ||
+        !chunk.isMember("data") || !chunk["data"].isString()) {
+        ROS_WARN_STREAM(
+            "data message for '" << _data_channel->label() << "' invalid"
+        );
+        return;
+    }
+
+    // message for chunk
+    bool created = false;
+    MessagePtr message;
+    Messages::iterator i = _messages.find(chunk["id"].asString());
+    if (i == _messages.end()) {
+        message.reset(new Message(
+            chunk["id"].asString(),
+            chunk["total"].asUInt(),
+            ros::Duration(10 * 60 /* 10 mins*/ )
+        ));
+        _messages.insert(Messages::value_type(chunk["id"].asString(), message));
+        created = true;
+    } else {
+        message = (*i).second;
+    }
+
+    // add chunk to message and finalize if complete
+    message->add_chunk(chunk["index"].asUInt(), chunk["data"].asString());
+    if (message->is_complete()) {
+        _messages.erase(chunk["id"].asString());
+        ros_webrtc::Data msg;
+        msg.label = _data_channel->label();
+        message->merge(msg);
+        _rpub.publish(msg);
+    }
+
+}
+
+// ChunkedDataObserver::Message
+
+ChunkedDataObserver::Message::Message(
+    const std::string& id,
+    size_t count,
+    const ros::Duration& duration
+    ) : id(id), count(count), expires_at(ros::Time::now() + duration) {
+}
+
+void ChunkedDataObserver::Message::add_chunk(size_t index, const std::string& data) {
+    for (std::list<Chunk>::iterator i = chunks.begin(); i != chunks.end(); i++) {
+        if (index < (*i).index) {
+            chunks.insert(i, Chunk(index, data));
+            return;
+        }
+        if (index == (*i).index) {
+            return;
+        }
+    }
+    chunks.push_back(Chunk(index, data));
+}
+
+void ChunkedDataObserver::Message::merge(ros_webrtc::Data &msg) {
+    size_t length = 0;
+    for (std::list<Chunk>::const_iterator i = chunks.begin(); i != chunks.end(); i++) {
+        length += (*i).buffer.size();
+    }
+    msg.encoding = "utf-8";
+    msg.buffer.reserve(length);
+    for (std::list<Chunk>::const_iterator i = chunks.begin(); i != chunks.end(); i++) {
+        msg.buffer.insert(
+            msg.buffer.end(),
+            &(*i).buffer[0],
+            &(*i).buffer[0] + (*i).buffer.size()
+        );
+    }
+}
+
+bool ChunkedDataObserver::Message::is_complete() const {
+    return chunks.size() == count;
+}
+
+bool ChunkedDataObserver::Message::is_expired() const {
+    return expires_at < ros::Time::now();
+}
+
+// ChunkedDataObserver::Message::Chunk
+
+ChunkedDataObserver::Message::Chunk::Chunk(
+    size_t index_,
+    const std::string& buffer_
+    ) : index(index_) {
+    buffer.insert(buffer.end(), &buffer_[0], &buffer_[0] + buffer_.size());
 }

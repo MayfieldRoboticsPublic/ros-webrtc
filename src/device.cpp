@@ -154,6 +154,15 @@ const Device::Sessions& Device::sessions() const {
     return _sessions;
 }
 
+Device::Flush Device::flush() {
+    Flush flush;
+    for (Sessions::iterator i = _sessions.begin(); i != _sessions.end(); i++) {
+        Session::Flush session_flush = (*i)->flush();
+        flush += session_flush;
+    }
+    return flush;
+}
+
 SessionPtr Device::session(const std::string& peer_id) {
     for (Sessions::iterator i = _sessions.begin(); i != _sessions.end(); i++) {
         if ((*i)->peer_id() == peer_id) {
@@ -347,7 +356,10 @@ bool Device::_serve_connect(ros::ServiceEvent<ros_webrtc::Connect::Request, ros_
     SessionPtr session(begin_session(
         req.peer_id, sdp_constraints, req.data_channels, service_names
     ));
-    session->create_offer();
+    if (!session->create_offer()) {
+        end_session(req.peer_id);
+        return false;
+    }
     return true;
 }
 
@@ -410,14 +422,20 @@ void Device::_handle_send(const ros_webrtc::DataConstPtr& msg) {
     );
     Device::Sessions ss(sessions());
     for(Device::Sessions::iterator i = ss.begin(); i != ss.end(); i++)  {
-        rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel((*i)->data_channel(msg->label));
+        Session::DataChannel* data_channel = (*i)->data_channel(msg->label);
         if (data_channel == NULL) {
             continue;
         }
-        data_channel->Send(data_buffer);
+        data_channel->send(data_buffer);
     }
 }
 
+// Device::Flush
+
+Device::Flush& Device::Flush::operator += (const Session::Flush & rhs) {
+    reaped_data_messages += rhs.reaped_data_messages;
+    return *this;
+}
 
 // Device::SessionObserver
 

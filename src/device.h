@@ -110,6 +110,16 @@ public:
 
     const Sessions& sessions() const;
 
+    struct Flush {
+
+        size_t reaped_data_messages;
+
+        Flush& operator += (const Session::Flush & rhs);
+
+    };
+
+    Flush flush();
+
 private:
 
     bool _create_pc_factory();

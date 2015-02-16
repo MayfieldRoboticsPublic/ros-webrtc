@@ -7,6 +7,19 @@
 #include "config.h"
 #include "device.h"
 
+
+struct Flush {
+
+    Flush(Device& device_) : device(device_) {}
+
+    void operator () (const ros::WallTimerEvent& event) {
+        device.flush();
+    }
+
+    Device &device;
+
+};
+
 int main(int argc, char **argv) {
     ROS_INFO_STREAM("initializing ros");
     ros::init(argc, argv, "webrtc", ros::init_options::AnonymousName);
@@ -38,6 +51,13 @@ int main(int argc, char **argv) {
         return 2;
     }
     ROS_INFO_STREAM("opened device");
+
+    ROS_INFO_STREAM("scheduling device flush every " << config.flush_frequency << " sec(s) ... ");
+    ros::NodeHandle nh;
+    Flush flush(device);
+    ros::WallTimer flush_timer = nh.createWallTimer(
+        ros::WallDuration(config.flush_frequency), flush, false
+    );
 
     ROS_INFO_STREAM("start spinning");
     ros::spin();

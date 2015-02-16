@@ -93,7 +93,9 @@ public:
 
     virtual ~DataObserver();
 
-private:
+    virtual size_t reap() = 0;
+
+protected:
 
     rtc::scoped_refptr<webrtc::DataChannelInterface> _data_channel;
 
@@ -105,10 +107,97 @@ public:
 
     virtual void OnStateChange();
 
+};
+
+class UnchunkedDataObserver : public DataObserver {
+
+public:
+
+    UnchunkedDataObserver(
+        ros::Publisher& rpub,
+        webrtc::DataChannelInterface* data_channel
+    );
+
+// DataObserver
+
+public:
+
+    virtual size_t reap();
+
+// webrtc::DataChannelObserver
+
+public:
+
     virtual void OnMessage(const webrtc::DataBuffer& buffer);
 
 };
 
-typedef boost::shared_ptr<DataObserver> DataObserverPtr;
+class ChunkedDataObserver : public DataObserver {
+
+public:
+
+    ChunkedDataObserver(
+        ros::Publisher& rpub,
+        webrtc::DataChannelInterface* data_channel
+    );
+
+private:
+
+    struct Message {
+
+        Message(
+            const std::string& id,
+            size_t count,
+            const ros::Duration& duration
+        );
+
+        void add_chunk(size_t index, const std::string& data);
+
+        bool is_complete() const;
+
+        bool is_expired() const;
+
+        void merge(ros_webrtc::Data& msg);
+
+        std::string id;
+
+        size_t count;
+
+        ros::Time expires_at;
+
+        struct Chunk {
+
+            Chunk(size_t index, const std::string &buffer);
+
+            size_t index;
+
+            std::vector<uint8_t> buffer;
+
+        };
+
+        std::list<Chunk> chunks;
+
+    };
+
+    typedef boost::shared_ptr<Message> MessagePtr;
+
+    typedef std::map<std::string, MessagePtr> Messages;
+
+    Messages _messages;
+
+
+// DataObserver
+
+public:
+
+    virtual size_t reap();
+
+// webrtc::DataChannelObserver
+
+public:
+
+    virtual void OnMessage(const webrtc::DataBuffer& buffer);
+
+};
 
 #endif /* WEBRTC_RENDERER_H_ */

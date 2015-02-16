@@ -16,6 +16,7 @@ find_package(PkgConfig REQUIRED COMPONENTS system)
 
 ## System dependencies also found via PkgConfig's conventions
 pkg_check_modules(jingle REQUIRED libjingle)
+pkg_check_modules(jsoncpp REQUIRED jsoncpp)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -107,13 +108,8 @@ catkin_package(
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${jingle_INCLUDE_DIRS}
+  ${jsoncpp_INCLUDE_DIRS}
 )
-
-## Specify additional CFlags
-foreach(cxx_flag ${jingle_CFLAGS})
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${cxx_flag}")
-endforeach(cxx_flag)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 ## Declare a cpp library
 # add_library(ros_webrtc
@@ -141,8 +137,14 @@ add_dependencies(device
 target_link_libraries(device
   ${catkin_LIBRARIES}
   ${jingle_STATIC_LDFLAGS}
+  ${jsoncpp_STATIC_LDFLAGS}
   ${CMAKE_DL_LIBS}
 )
+
+## Specify additional compile flags
+foreach(cxx_flag "-std=c++11" ${jingle_CFLAGS} ${jsoncpp_CFLAGS})
+  set_property(TARGET device APPEND_STRING PROPERTY COMPILE_FLAGS " ${cxx_flag}")
+endforeach(cxx_flag)
 
 #############
 ## Install ##
