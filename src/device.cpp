@@ -247,11 +247,12 @@ bool Device::_open_local_stream() {
     }
     rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
         _pc_factory->CreateAudioTrack(
-           audio_label, _pc_factory->CreateAudioSource(&_audio_src.constraints)
+           audio_label,
+           _pc_factory->CreateAudioSource(&_audio_src.constraints)
         )
     );
     if(audio_track.get() == NULL) {
-        ROS_ERROR_STREAM("cannot create track '" << audio_label << "'");
+        ROS_ERROR("cannot create track '%s'", audio_label.c_str());
         return false;
     }
     if (_audio_src.publish) {
@@ -270,6 +271,7 @@ bool Device::_open_local_stream() {
         // capturer
         std::auto_ptr<cricket::VideoCapturer> video_capturer;
         switch (video_src.type) {
+            // native
             case DeviceVideoSource::DeviceType: {
                 cricket::Device device;
                 if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &device)) {
@@ -283,6 +285,8 @@ bool Device::_open_local_stream() {
                 }
                 break;
             }
+
+            // ros-topic
             case DeviceVideoSource::ROSTopicType: {
                 cricket::Device device(video_src.name, video_src.name);
                 std::auto_ptr<WebRtcVideoCapturer> webrtc_video_capturer(new WebRtcVideoCapturer());
@@ -293,9 +297,10 @@ bool Device::_open_local_stream() {
                 video_capturer.reset(webrtc_video_capturer.release());
                 break;
             }
+
             default: {
                 ROS_ERROR(
-                    "unsupported type for video source '%s' type '%d' is not supported",
+                    "video source '%s' type '%d' is not supported",
                     video_src.name.c_str(), video_src.type
                 );
                 return false;
@@ -312,11 +317,15 @@ bool Device::_open_local_stream() {
         }
         rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
             _pc_factory->CreateVideoTrack(
-                video_label, _pc_factory->CreateVideoSource(video_capturer.get(), &video_src.constraints)
+                video_label,
+                _pc_factory->CreateVideoSource(video_capturer.get(), &video_src.constraints)
             )
         );
         if(video_track.get() == NULL) {
-            ROS_ERROR("cannot create track '%s' for video capture device '%s'", video_label.c_str(), video_src.name.c_str());
+            ROS_ERROR(
+                "cannot create track '%s' for video capture device '%s'",
+                video_label.c_str(), video_src.name.c_str()
+            );
             return false;
         }
         video_capturer.release();

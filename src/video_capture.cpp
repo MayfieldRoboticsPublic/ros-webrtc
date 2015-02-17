@@ -70,7 +70,7 @@ int32_t VideoCaptureDeviceInfo::GetDeviceName(
     if (deviceNameLength >= topic.name.size() + 1) {
         memcpy(deviceNameUTF8, topic.name.c_str(), topic.name.size() + 1);
     } else {
-        ROS_ERROR_STREAM("buffer passed is too small");
+        ROS_ERROR("buffer passed is too small");
         return -1;
     }
 
@@ -78,7 +78,7 @@ int32_t VideoCaptureDeviceInfo::GetDeviceName(
     if (deviceUniqueIdUTF8Length >= topic.name.size() + 1) {
         memcpy(deviceUniqueIdUTF8, topic.name.c_str(), topic.name.size() + 1);
     } else {
-        ROS_ERROR_STREAM("buffer passed is too small");
+        ROS_ERROR("buffer passed is too small");
         return -1;
     }
 
@@ -106,7 +106,7 @@ int32_t VideoCaptureDeviceInfo::CreateCapabilityMap (const char* deviceUniqueIdU
     }
     const ros::master::TopicInfo& topic = topics[index];
 
-    webrtc::RawVideoType fmts[] {
+    webrtc::RawVideoType formats[] {
 //        webrtc::kVideoI420,
 //        webrtc::kVideoYV12,
 //        webrtc::kVideoYUY2,
@@ -139,17 +139,17 @@ int32_t VideoCaptureDeviceInfo::CreateCapabilityMap (const char* deviceUniqueIdU
         { 1920, 1080 }
     };
 
-    for (size_t fmt_index = 0; fmt_index < sizeof(fmts) / sizeof(fmts[0]); fmt_index++) {
-        for (size_t size_index = 0; size_index < sizeof(sizes) / sizeof(sizes[0]); size_index++) {
+    for (size_t format_idx = 0; format_idx < sizeof(formats) / sizeof(formats[0]); format_idx++) {
+        for (size_t size_idx = 0; size_idx < sizeof(sizes) / sizeof(sizes[0]); size_idx++) {
             webrtc::VideoCaptureCapability cap;
 
             cap.codecType = webrtc::kVideoCodecUnknown;
             cap.interlaced = false;
             cap.expectedCaptureDelay = 120; // TODO: what's this?
             cap.maxFPS = 30; // TODO: or 15?
-            cap.rawType = fmts[fmt_index];
-            cap.width = sizes[size_index][0];
-            cap.height = sizes[size_index][1];
+            cap.rawType = formats[format_idx];
+            cap.width = sizes[size_idx][0];
+            cap.height = sizes[size_idx][1];
 
             _captureCapabilities.push_back(cap);
         }
@@ -192,12 +192,12 @@ VideoCaptureModule::VideoCaptureModule(int32_t id) :
 
 VideoCaptureModule::~VideoCaptureModule() {
     StopCapture();
+    _subscriber.shutdown();
+    _nh.setCallbackQueue(NULL);
     if (_capture_cs) {
         delete _capture_cs;
         _capture_cs = NULL;
     }
-    _subscriber.shutdown();
-    _nh.setCallbackQueue(NULL);
 }
 
 int32_t VideoCaptureModule::init(const char* deviceUniqueIdUTF8) {
@@ -216,7 +216,7 @@ int32_t VideoCaptureModule::init(const char* deviceUniqueIdUTF8) {
         }
     }
     if (index == -1) {
-        ROS_ERROR_STREAM("no matching device  for '" << deviceUniqueIdUTF8 << "'found");
+        ROS_ERROR("no matching device  for '%s' found", deviceUniqueIdUTF8);
         return -1;
     }
     _topic = topics[index].name;

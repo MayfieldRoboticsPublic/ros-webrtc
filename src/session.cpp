@@ -184,10 +184,10 @@ void Session::_close_peer_connection() {
         _video_renderers.pop_front();
     }
     for (DataChannels::iterator i = _dcs.begin(); i != _dcs.end(); i++) {
-        (*i).provider = NULL;
         while (!(*i).observers.empty()) {
             (*i).observers.pop_front();
         }
+        (*i).provider = NULL;
     }
     if (_pc != NULL) {
         _pc->Close();
@@ -261,8 +261,16 @@ Session::DataChannel::DataChannel(const ros_webrtc::DataChannel& conf_) :
 }
 
 void Session::DataChannel::send(webrtc::DataBuffer& data_buffer, bool transfer) {
+    rtc::scoped_refptr<webrtc::DataChannelInterface> provider_ = provider;
+    if (provider_.get() == NULL) {
+        ROS_INFO(
+            "data channel '%s' has no provider, dropping message (%zu)... ",
+            conf.label.c_str(), data_buffer.size()
+        );
+        return;
+    }
     if (conf.chunk_size == 0) {
-        provider->Send(data_buffer);
+        provider_->Send(data_buffer);
     } else {
         // TODO: rate limit?
         ChunkedDataTransfer xfer(generate_id(), data_buffer, conf.chunk_size);
