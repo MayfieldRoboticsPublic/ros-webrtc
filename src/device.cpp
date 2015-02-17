@@ -7,23 +7,28 @@
 #include <talk/media/webrtc/webrtcvideodecoderfactory.h>
 
 #include "util.h"
+#include "video_capture.h"
 
 
 // DeviceVideoSource
 
-DeviceVideoSource::DeviceVideoSource() : publish(false) {
+DeviceVideoSource::DeviceVideoSource() :
+    type(NoneType),
+    publish(false) {
 }
 
 DeviceVideoSource::DeviceVideoSource(
-    const std::string& name_,
-    const std::string& label_,
-    const MediaConstraints& constraints_,
-    bool publish_
+    Type type,
+    const std::string& name,
+    const std::string& label,
+    const MediaConstraints& constraints,
+    bool publish
     ) :
-    name(name_),
-    label(label_),
-    constraints(constraints_),
-    publish (publish_) {
+    type(type),
+    name(name),
+    label(label),
+    constraints(constraints),
+    publish(publish) {
 }
 
 
@@ -225,6 +230,13 @@ bool Device::_open_local_stream() {
     ss.clear();
     _local_stream = _pc_factory->CreateLocalMediaStream(stream_label);
 
+    ROS_DEBUG_STREAM("creating device manager");
+    rtc::scoped_ptr<cricket::DeviceManagerInterface> dev_mgr(cricket::DeviceManagerFactory::Create());
+    if (!dev_mgr->Init()) {
+        ROS_ERROR_STREAM("cannot create device manager");
+        return false;
+    }
+
     // audio track
     std::string audio_label = _audio_src.label;
     if (audio_label.empty()) {
@@ -252,25 +264,42 @@ bool Device::_open_local_stream() {
     _local_stream->AddTrack(audio_track);
 
     // video tracks
-    ROS_DEBUG_STREAM("creating device manager");
-    rtc::scoped_ptr<cricket::DeviceManagerInterface> dev_mgr(cricket::DeviceManagerFactory::Create());
-    if (!dev_mgr->Init()) {
-        ROS_ERROR_STREAM("cannot create device manager");
-        return false;
-    }
     for (size_t i = 0; i != _video_srcs.size(); i++) {
         const DeviceVideoSource& video_src = _video_srcs[i];
 
         // capturer
-        cricket::Device video_device;
-        if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &video_device)) {
-            ROS_ERROR_STREAM("cannot get video capture device for '" << video_src.name << "'");
-            return false;
-        }
-        cricket::VideoCapturer* video_capturer = dev_mgr->CreateVideoCapturer(video_device);
-        if (video_capturer == NULL) {
-            ROS_ERROR_STREAM("cannot cast video capture device for '" << video_src.name << "'");
-            return false;
+        std::auto_ptr<cricket::VideoCapturer> video_capturer;
+        switch (video_src.type) {
+            case DeviceVideoSource::DeviceType: {
+                cricket::Device device;
+                if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &device)) {
+                    ROS_ERROR("cannot get video capture device for '%s'", video_src.name.c_str());
+                    return false;
+                }
+                video_capturer.reset(dev_mgr->CreateVideoCapturer(device));
+                if (video_capturer.get() == NULL) {
+                    ROS_ERROR("cannot cast video capture device for '%s'", video_src.name.c_str());
+                    return false;
+                }
+                break;
+            }
+            case DeviceVideoSource::ROSTopicType: {
+                cricket::Device device(video_src.name, video_src.name);
+                std::auto_ptr<WebRtcVideoCapturer> webrtc_video_capturer(new WebRtcVideoCapturer());
+                if (!webrtc_video_capturer->Init(device)) {
+                    ROS_ERROR("initialization for video capturer for '%s' failed", video_src.name.c_str());
+                    return false;
+                }
+                video_capturer.reset(webrtc_video_capturer.release());
+                break;
+            }
+            default: {
+                ROS_ERROR(
+                    "unsupported type for video source '%s' type '%d' is not supported",
+                    video_src.name.c_str(), video_src.type
+                );
+                return false;
+            }
         }
 
         // track
@@ -283,13 +312,14 @@ bool Device::_open_local_stream() {
         }
         rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
             _pc_factory->CreateVideoTrack(
-                video_label, _pc_factory->CreateVideoSource(video_capturer, &video_src.constraints)
+                video_label, _pc_factory->CreateVideoSource(video_capturer.get(), &video_src.constraints)
             )
         );
         if(video_track.get() == NULL) {
-            ROS_ERROR_STREAM("cannot create track '" << video_label << "' for video capture device '" << video_src.name << "'");
+            ROS_ERROR("cannot create track '%s' for video capture device '%s'", video_label.c_str(), video_src.name.c_str());
             return false;
         }
+        video_capturer.release();
         if (video_src.publish) {
             VideoRendererPtr video_renderer(new VideoRenderer(
                 _nh,

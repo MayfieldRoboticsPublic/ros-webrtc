@@ -77,6 +77,15 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, DeviceVideoSourc
     if (!nh.getParam(ros::names::append(root, "name"), value.name)) {
         return false;
     }
+    if (value.name.find("sys://") == 0) {
+        value.name = value.name.substr(6);
+        value.type = DeviceVideoSource::DeviceType;
+    } else if (value.name.find("ros://") == 0) {
+        value.name = value.name.substr(6);
+        value.type = DeviceVideoSource::ROSTopicType;
+    } else {
+        value.type = DeviceVideoSource::DeviceType;
+    }
     nh.getParam(ros::names::append(root, "label"), value.label);
     if (!_get(nh, ros::names::append(root, "constraints"), value.constraints)) {
         return false;
@@ -86,6 +95,13 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, DeviceVideoSourc
 }
 
 void Config::_set(ros::NodeHandle& nh, const std::string& root, const DeviceVideoSource& value) {
+    std::string scheme;
+    switch (value.type) {
+        case DeviceVideoSource::ROSTopicType:
+            scheme = "ros://";
+            break;
+    }
+    nh.setParam(ros::names::append(root, "name"), scheme + value.name);
     nh.setParam(ros::names::append(root, "label"), value.label);
     _set(nh, ros::names::append(root, "constraints"), value.constraints);
     nh.setParam(ros::names::append(root, "publish"), value.publish);

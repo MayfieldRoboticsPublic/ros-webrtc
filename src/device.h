@@ -15,14 +15,23 @@
 
 struct DeviceVideoSource {
 
+    enum Type {
+        NoneType = 0,
+        DeviceType,
+        ROSTopicType
+    };
+
     DeviceVideoSource();
 
     DeviceVideoSource(
+        Type type,
         const std::string& name,
         const std::string& label,
         const MediaConstraints& constraints,
         bool publish = false
     );
+
+    Type type;
 
     std::string name;
 

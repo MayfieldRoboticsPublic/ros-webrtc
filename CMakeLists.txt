@@ -8,11 +8,14 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   genmsg
+  cv_bridge
+  image_transport
 )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(PkgConfig REQUIRED COMPONENTS system)
+find_package(OpenCV)
 
 ## System dependencies also found via PkgConfig's conventions
 pkg_check_modules(jingle REQUIRED libjingle)
@@ -109,6 +112,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${jingle_INCLUDE_DIRS}
   ${jsoncpp_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 ## Declare a cpp library
@@ -125,6 +129,7 @@ add_executable(device
    src/renderer.cpp
    src/session.cpp
    src/util.cpp
+   src/video_capture.cpp
 )
 
 ## Add cmake target dependencies of the executable/library
@@ -138,6 +143,7 @@ target_link_libraries(device
   ${catkin_LIBRARIES}
   ${jingle_STATIC_LDFLAGS}
   ${jsoncpp_STATIC_LDFLAGS}
+  ${OpenCV_LIBRARIES}
   ${CMAKE_DL_LIBS}
 )
 
