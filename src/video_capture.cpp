@@ -416,8 +416,3 @@ webrtc::VideoCaptureModule::DeviceInfo* WebRtcVcmFactory::CreateDeviceInfo(int i
 void WebRtcVcmFactory::DestroyDeviceInfo(webrtc::VideoCaptureModule::DeviceInfo* info) {
     // do nothing
 }
-
-// WebRtcVideoCapturer
-
-WebRtcVideoCapturer::WebRtcVideoCapturer() : cricket::WebRtcVideoCapturer(new WebRtcVcmFactory()) {
-}

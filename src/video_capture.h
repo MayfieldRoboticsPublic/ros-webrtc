@@ -145,12 +145,4 @@ public:
 
 };
 
-class WebRtcVideoCapturer : public cricket::WebRtcVideoCapturer {
-
-public:
-
-    WebRtcVideoCapturer();
-
-};
-
 #endif /* WEBRTC_VIDEO_CAPTURE_H_ */

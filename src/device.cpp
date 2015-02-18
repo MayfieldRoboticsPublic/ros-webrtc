@@ -289,7 +289,9 @@ bool Device::_open_local_stream() {
             // ros-topic
             case DeviceVideoSource::ROSTopicType: {
                 cricket::Device device(video_src.name, video_src.name);
-                std::auto_ptr<WebRtcVideoCapturer> webrtc_video_capturer(new WebRtcVideoCapturer());
+                std::auto_ptr<cricket::WebRtcVideoCapturer> webrtc_video_capturer(
+                    new cricket::WebRtcVideoCapturer(new WebRtcVcmFactory())
+                );
                 if (!webrtc_video_capturer->Init(device)) {
                     ROS_ERROR("initialization for video capturer for '%s' failed", video_src.name.c_str());
                     return false;
