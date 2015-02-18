@@ -442,7 +442,7 @@ void Session::PeerConnectionObserver::OnIceCandidate(const webrtc::IceCandidateI
     srv.request.sdp_mline_index = candidate->sdp_mline_index();
     candidate->ToString(&srv.request.candidate);
     if (!instance._service_clis["ice_candidate"].call(srv)) {
-        ROS_ERROR_STREAM("peer " << instance._peer_id << " 'sdp_offer_answer' call failed");
+        ROS_ERROR_STREAM("peer " << instance._peer_id << " 'ice_candidate' call failed");
     }
 }
 
