@@ -1,5 +1,5 @@
-#ifndef WEBRTC_DEVICE_H_
-#define WEBRTC_DEVICE_H_
+#ifndef ROS_WEBRTC_HOST_H_
+#define ROS_WEBRTC_HOST_H_
 
 #include <ros_webrtc/Connect.h>
 #include <ros_webrtc/Data.h>
@@ -12,18 +12,19 @@
 #include "media_constraints.h"
 #include "session.h"
 
+class Host;
 
-struct DeviceVideoSource {
+struct VideoSource {
 
     enum Type {
         NoneType = 0,
-        DeviceType,
-        ROSTopicType
+        SystemType,
+        ROSType
     };
 
-    DeviceVideoSource();
+    VideoSource();
 
-    DeviceVideoSource(
+    VideoSource(
         Type type,
         const std::string& name,
         const std::string& label,
@@ -43,11 +44,11 @@ struct DeviceVideoSource {
 
 };
 
-struct DeviceAudioSource {
+struct AudioSource {
 
-    DeviceAudioSource();
+    AudioSource();
 
-    DeviceAudioSource(
+    AudioSource(
         const std::string& label,
         const MediaConstraints& constraints,
         bool publish = false
@@ -61,13 +62,13 @@ struct DeviceAudioSource {
 
 };
 
-struct DeviceFactory {
+struct HostFactory {
 
-    Device operator()();
+    Host operator()();
 
-    std::vector<DeviceVideoSource> video_srcs;
+    std::vector<VideoSource> video_srcs;
 
-    DeviceAudioSource audio_src;
+    AudioSource audio_src;
 
     MediaConstraints session_constraints;
 
@@ -75,20 +76,20 @@ struct DeviceFactory {
 
 };
 
-class Device {
+class Host {
 
 public:
 
-    Device(
-        const std::vector<DeviceVideoSource>& video_srcs,
-        const DeviceAudioSource& audio_src,
+    Host(
+        const std::vector<VideoSource>& video_srcs,
+        const AudioSource& audio_src,
         const MediaConstraints& session_constraints,
         const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers
     );
 
-    Device(const Device& other);
+    Host(const Host& other);
 
-    ~Device();
+    ~Host();
 
     const std::string& id() const;
 
@@ -157,13 +158,13 @@ private:
 
     public:
 
-        SessionObserver(Device& instance_, SessionPtr session_);
+        SessionObserver(Host& instance_, SessionPtr session_);
 
         ~SessionObserver();
 
     private:
 
-        Device& instance;
+        Host& instance;
 
         SessionPtr session;
 
@@ -177,9 +178,9 @@ private:
 
     ros::NodeHandle _nh;
 
-    std::vector<DeviceVideoSource> _video_srcs;
+    std::vector<VideoSource> _video_srcs;
 
-    DeviceAudioSource _audio_src;
+    AudioSource _audio_src;
 
     MediaConstraints _session_constraints;
 
@@ -209,6 +210,6 @@ private:
 
 };
 
-typedef boost::shared_ptr<Device> DevicePtr;
+typedef boost::shared_ptr<Host> HostPtr;
 
 #endif  /* WEBRTC_DEVICE_H_ */

@@ -1,10 +1,10 @@
-#ifndef WEBRTC_CONFIG_H_
-#define WEBRTC_CONFIG_H_
+#ifndef ROS_WEBRTC_CONFIG_H_
+#define ROS_WEBRTC_CONFIG_H_
 
 #include <ros/ros.h>
 #include <talk/app/webrtc/peerconnectioninterface.h>
 
-#include "device.h"
+#include "host.h"
 #include "media_constraints.h"
 
 /*
@@ -25,10 +25,10 @@ public:
 
        cameras:
         downward:
-          name: "Loopback video device 0"
+          name: ros:///downward_facing_camera/image_raw
           label: downward
         upward:
-          name: "Loopback video device 1"
+          name: ros:///upward_facing_camera/image_raw
           label: upward
        session:
          constraints:
@@ -47,9 +47,9 @@ public:
      */
     void set();
 
-    std::vector<DeviceVideoSource> cameras; /*! Video input devices. */
+    std::vector<VideoSource> cameras; /*! Video sources. */
 
-    DeviceAudioSource microphone; /*! Single audio input device. */
+    AudioSource microphone; /*! Single audio source. */
 
     MediaConstraints session_constraints; /*! Session media constraints. */
 
@@ -61,13 +61,13 @@ public:
 
 private:
 
-    static bool _get(ros::NodeHandle& nh, const std::string& root, DeviceVideoSource& value);
+    static bool _get(ros::NodeHandle& nh, const std::string& root, VideoSource& value);
 
-    static void _set(ros::NodeHandle& nh, const std::string& root, const DeviceVideoSource& value);
+    static void _set(ros::NodeHandle& nh, const std::string& root, const VideoSource& value);
 
-    static bool _get(ros::NodeHandle& nh, const std::string& root, DeviceAudioSource& value);
+    static bool _get(ros::NodeHandle& nh, const std::string& root, AudioSource& value);
 
-    static void _set(ros::NodeHandle& nh, const std::string& root, const DeviceAudioSource& value);
+    static void _set(ros::NodeHandle& nh, const std::string& root, const AudioSource& value);
 
     static bool _get(ros::NodeHandle& nh, const std::string& root, MediaConstraints& value);
 
@@ -79,4 +79,4 @@ private:
 
 };
 
-#endif /* WEBRTC_CONFIG_H_ */
+#endif /* ROS_WEBRTC_CONFIG_H_ */

@@ -4,7 +4,7 @@
 #include <ros/ros.h>
 #include <talk/app/webrtc/jsepicecandidate.h>
 
-#include "device.h"
+#include "host.h"
 #include "util.h"
 
 // Session
@@ -99,7 +99,7 @@ void Session::create_answer() {
     _pc->CreateAnswer(_csdo, &_sdp_constraints);
 }
 
-bool Session::is_offerer() {
+bool Session::is_offerer() const {
     return _is_offerer;
 }
 
@@ -275,7 +275,7 @@ void Session::DataChannel::send(webrtc::DataBuffer& data_buffer, bool transfer) 
         // TODO: rate limit?
         ChunkedDataTransfer xfer(generate_id(), data_buffer, conf.chunk_size);
         while (!xfer.is_complete()) {
-            xfer.send(provider);
+            xfer(provider);
         }
     }
 }
@@ -298,7 +298,7 @@ bool Session::ChunkedDataTransfer::is_complete() const {
     return current == total;
 }
 
-size_t Session::ChunkedDataTransfer::send(webrtc::DataChannelInterface* provider) {
+size_t Session::ChunkedDataTransfer::operator()(webrtc::DataChannelInterface* provider) {
     size_t bytes = 0;
 
     Json::Value chunk;

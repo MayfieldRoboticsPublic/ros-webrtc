@@ -1,24 +1,189 @@
 #include "video_capture.h"
 
-#include <algorithm>
-
 #include <cv_bridge/cv_bridge.h>
 #include <opencv/cv.hpp>
-#include <ros/ros.h>
-#include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/Image.h>
 #include <webrtc/system_wrappers/interface/ref_count.h>
 
-// VideoCaptureDeviceInfo
+// VideoCaptureModule
 
-VideoCaptureDeviceInfo::VideoCaptureDeviceInfo(
+ROSVideoCaptureModule::ROSVideoCaptureModule(int32_t id) :
+    VideoCaptureImpl(id),
+    _capture_cs(webrtc::CriticalSectionWrapper::CreateCriticalSection()),
+    _capturing(false),
+    _capture_thd(NULL) {
+    _nh.setCallbackQueue(&_image_q);
+}
+
+ROSVideoCaptureModule::~ROSVideoCaptureModule() {
+    StopCapture();
+    _subscriber.shutdown();
+    _nh.setCallbackQueue(NULL);
+    if (_capture_cs) {
+        delete _capture_cs;
+        _capture_cs = NULL;
+    }
+}
+
+int32_t ROSVideoCaptureModule::init(const char* deviceUniqueIdUTF8) {
+    // find topic by unique id
+    ros::master::V_TopicInfo topics;
+    if (!ros::master::getTopics(topics)) {
+        ROS_WARN_STREAM("failed to get topics");
+        return -1;
+    }
+    size_t index = -1;
+    for (size_t i = 0; i < topics.size(); i++) {
+        const ros::master::TopicInfo& topic = topics[i];
+        if (topic.datatype == "sensor_msgs/Image" && topic.name == deviceUniqueIdUTF8) {
+            index = i;
+            break;
+        }
+    }
+    if (index == -1) {
+        ROS_ERROR("no matching device  for '%s' found", deviceUniqueIdUTF8);
+        return -1;
+    }
+    _topic = topics[index].name;
+
+    // subscribe to the topic
+    _subscriber = _nh.subscribe(_topic, 1, &ROSVideoCaptureModule::_image_callback, this);
+
+    return 0;
+}
+
+bool ROSVideoCaptureModule::_capture_thread(void* obj) {
+    return static_cast<ROSVideoCaptureModule*>(obj)->_capture_poll();
+}
+
+bool ROSVideoCaptureModule::_capture_poll() {
+    {
+        // lock
+        webrtc::CriticalSectionScoped cs(_capture_cs);
+        if (!_capturing)
+            return false;
+
+        // poll
+        ros::CallbackQueue::CallOneResult result = ros::CallbackQueue::TryAgain;
+        while (result == ros::CallbackQueue::TryAgain) {
+            // NOTE: handler is ROSVideoCaptureModule::_image_callback
+            result = _image_q.callOne();
+        }
+        if (result != ros::CallbackQueue::Called)
+            return true;
+    }
+
+    usleep(0);  // yield
+    return true;
+}
+
+void ROSVideoCaptureModule::_image_callback(const sensor_msgs::ImageConstPtr& msg) {
+    // force to bgr8
+    cv::Mat bgr = cv_bridge::toCvShare(msg, "bgr8")->image;
+
+    // convert to I420
+    cv::Mat yuv(bgr.rows, bgr.cols, CV_8UC4);
+    cv::cvtColor(bgr, yuv, CV_BGR2YUV_I420);
+
+    // adjust caps
+    _capability.width = bgr.cols;
+    _capability.height = bgr.rows;
+    _capability.rawType = webrtc::kVideoI420;
+
+    // send it along
+    IncomingFrame(yuv.data, yuv.rows * yuv.step, _capability, msg->header.stamp.toNSec());
+}
+
+webrtc::VideoCaptureModule* ROSVideoCaptureModule::Create(const int32_t id, const char* deviceUniqueIdUTF8) {
+    webrtc::RefCountImpl<ROSVideoCaptureModule>* obj = new webrtc::RefCountImpl<ROSVideoCaptureModule>(id);
+    if (!obj || obj->init(deviceUniqueIdUTF8) != 0) {
+        delete obj;
+        obj = NULL;
+    }
+    return obj;
+}
+
+ROSVideoCaptureModule::DeviceInfo* ROSVideoCaptureModule::CreateDeviceInfo(const int32_t id) {
+    return new ROSVideoCaptureDeviceInfo(id);
+}
+
+int32_t ROSVideoCaptureModule::StartCapture(const webrtc::VideoCaptureCapability& capability) {
+    if (_capturing) {
+        if (capability.width == _capability.width &&
+            capability.height == _capability.height &&
+            capability.rawType == _capability.rawType) {
+            // already started w/ same profile
+            return 0;
+        } else {
+            // profile changes, so stop
+            StopCapture();
+        }
+    }
+
+    webrtc::CriticalSectionScoped cs(_capture_cs);
+
+    //start capture thread;
+    if (_capture_thd == NULL) {
+        _capture_thd = webrtc::ThreadWrapper::CreateThread(
+            ROSVideoCaptureModule::_capture_thread, this, webrtc::kHighPriority
+        );
+        if (_capture_thd == NULL) {
+            return -1;
+        }
+        unsigned int id;
+        _capture_thd->Start(id);
+    }
+
+    // done
+    _capability = capability;
+    _capturing = true;
+
+    return 0;
+}
+
+int32_t ROSVideoCaptureModule::StopCapture() {
+    if (_capture_thd != NULL) {
+        if (_capture_thd->Stop()) {
+            delete _capture_thd;
+            _capture_thd = NULL;
+        } else {
+            ROS_ERROR("could not stop capture thread, leaking it ...");
+            assert(false);
+            _capture_thd = NULL;
+        }
+    }
+
+    {
+        webrtc::CriticalSectionScoped cs(_capture_cs);
+        if (_capturing) {
+            _capturing = false;
+            _image_q.clear();
+        }
+    }
+
+    return 0;
+}
+
+bool ROSVideoCaptureModule::CaptureStarted() {
+    return _capturing;
+}
+
+int32_t ROSVideoCaptureModule::CaptureSettings(webrtc::VideoCaptureCapability& settings) {
+    settings = _capability;
+    return 0;
+}
+
+// ROSVideoCaptureDeviceInfo
+
+ROSVideoCaptureDeviceInfo::ROSVideoCaptureDeviceInfo(
     const int32_t id
     ) : DeviceInfoImpl(id) {
 }
 
-VideoCaptureDeviceInfo::~VideoCaptureDeviceInfo() {
+ROSVideoCaptureDeviceInfo::~ROSVideoCaptureDeviceInfo() {
 }
 
-uint32_t VideoCaptureDeviceInfo::NumberOfDevices() {
+uint32_t ROSVideoCaptureDeviceInfo::NumberOfDevices() {
     // count all published topics w/ date-type sensor_msgs/Image
     uint32_t count = 0;
     ros::master::V_TopicInfo topics;
@@ -36,7 +201,7 @@ uint32_t VideoCaptureDeviceInfo::NumberOfDevices() {
     return count;
 }
 
-int32_t VideoCaptureDeviceInfo::GetDeviceName(
+int32_t ROSVideoCaptureDeviceInfo::GetDeviceName(
     uint32_t deviceNumber,
     char* deviceNameUTF8,
     uint32_t deviceNameLength,
@@ -85,7 +250,7 @@ int32_t VideoCaptureDeviceInfo::GetDeviceName(
     return 0;
 }
 
-int32_t VideoCaptureDeviceInfo::CreateCapabilityMap (const char* deviceUniqueIdUTF8) {
+int32_t ROSVideoCaptureDeviceInfo::CreateCapabilityMap (const char* deviceUniqueIdUTF8) {
     // find topic by unique id
     ros::master::V_TopicInfo topics;
     if (!ros::master::getTopics(topics)) {
@@ -166,7 +331,7 @@ int32_t VideoCaptureDeviceInfo::CreateCapabilityMap (const char* deviceUniqueIdU
    return _captureCapabilities.size();
 }
 
-int32_t VideoCaptureDeviceInfo::DisplayCaptureSettingsDialogBox(
+int32_t ROSVideoCaptureDeviceInfo::DisplayCaptureSettingsDialogBox(
     const char* deviceUniqueIdUTF8,
     const char* dialogTitleUTF8,
     void* parentWindow,
@@ -176,243 +341,6 @@ int32_t VideoCaptureDeviceInfo::DisplayCaptureSettingsDialogBox(
     return -1;  // not supported
 }
 
-int32_t VideoCaptureDeviceInfo::Init() {
+int32_t ROSVideoCaptureDeviceInfo::Init() {
     return 0;  // do nothing
-}
-
-// VideoCaptureModule
-
-VideoCaptureModule::VideoCaptureModule(int32_t id) :
-    VideoCaptureImpl(id),
-    _capture_cs(webrtc::CriticalSectionWrapper::CreateCriticalSection()),
-    _capturing(false),
-    _capture_thd(NULL) {
-    _nh.setCallbackQueue(&_cb_q);
-}
-
-VideoCaptureModule::~VideoCaptureModule() {
-    StopCapture();
-    _subscriber.shutdown();
-    _nh.setCallbackQueue(NULL);
-    if (_capture_cs) {
-        delete _capture_cs;
-        _capture_cs = NULL;
-    }
-}
-
-int32_t VideoCaptureModule::init(const char* deviceUniqueIdUTF8) {
-    // find topic by unique id
-    ros::master::V_TopicInfo topics;
-    if (!ros::master::getTopics(topics)) {
-        ROS_WARN_STREAM("failed to get topics");
-        return -1;
-    }
-    size_t index = -1;
-    for (size_t i = 0; i < topics.size(); i++) {
-        const ros::master::TopicInfo& topic = topics[i];
-        if (topic.datatype == "sensor_msgs/Image" && topic.name == deviceUniqueIdUTF8) {
-            index = i;
-            break;
-        }
-    }
-    if (index == -1) {
-        ROS_ERROR("no matching device  for '%s' found", deviceUniqueIdUTF8);
-        return -1;
-    }
-    _topic = topics[index].name;
-
-    // subscribe to the topic
-    _subscriber = _nh.subscribe(_topic, 100, &VideoCaptureModule::_enqueue_image, this);
-
-    return 0;
-}
-
-bool VideoCaptureModule::_capture(void* obj) {
-    return static_cast<VideoCaptureModule*>(obj)->_capture_image();
-}
-
-bool VideoCaptureModule::_capture_image() {
-    ros::WallDuration timeout(1.0);
-
-    {
-        // lock
-        webrtc::CriticalSectionScoped cs(_capture_cs);
-        if (!_capturing) {
-            return false;
-        }
-
-        // queue image
-        ros::CallbackQueue::CallOneResult result = ros::CallbackQueue::TryAgain;
-        while (result == ros::CallbackQueue::TryAgain) {
-            result = _cb_q.callOne();
-        }
-        if (!_capturing) {
-            return false;
-        }
-        if (result != ros::CallbackQueue::Called) {
-            return true;
-        }
-
-        // deliver
-        Frame frame = _frames.front();
-        _frames.pop();
-        // TODO: check return code?
-        IncomingFrame(&frame.buffer[0], frame.buffer.size(), _capability);
-    }
-
-    usleep(0);  // yield
-    return true;
-}
-
-void VideoCaptureModule::_enqueue_image(const sensor_msgs::ImageConstPtr& image) {
-    Frame frame;
-
-    // encode
-    cv_bridge::CvImagePtr cv_msg = cv_bridge::toCvCopy(image, _frame_encoding);
-    if (cv_msg == NULL) {
-        ROS_ERROR(
-            "failed to copy sensor image '%s' to cv image '%s'",
-            image->encoding.c_str(), _frame_encoding.c_str()
-        );
-        return;
-    }
-    cv::Mat cv_image;
-    cv::swap(cv_msg->image, cv_image);
-
-    // resize
-    if (image->width != _capability.width || image->height != _capability.height) {
-        cv::Mat cv_resize_image;
-        cv::resize(cv_image, cv_resize_image, cv::Size(_capability.width, _capability.height));
-        cv::swap(cv_image, cv_resize_image);
-    }
-
-    frame.buffer.resize(cv_image.rows * cv_image.cols * 3);
-    uint8_t* b = &frame.buffer[0];
-    cv::Vec3b p;
-    for (int row = 0; row != cv_image.rows; row += 1) {
-        for (int col = 0; col != cv_image.cols; col += 1) {
-            p = cv_image.at<cv::Vec3b>(row, col);
-            *(b++) = p[2];
-            *(b++) = p[1];
-            *(b++) = p[0];
-        }
-    }
-    _frames.push(frame);
-}
-
-webrtc::VideoCaptureModule* VideoCaptureModule::Create(const int32_t id, const char* deviceUniqueIdUTF8) {
-    webrtc::RefCountImpl<VideoCaptureModule>* obj = new webrtc::RefCountImpl<VideoCaptureModule>(id);
-    if (!obj || obj->init(deviceUniqueIdUTF8) != 0) {
-        delete obj;
-        obj = NULL;
-    }
-    return obj;
-}
-
-VideoCaptureModule::DeviceInfo* VideoCaptureModule::CreateDeviceInfo(const int32_t id) {
-    return new VideoCaptureDeviceInfo(id);
-}
-
-int32_t VideoCaptureModule::StartCapture(const webrtc::VideoCaptureCapability& capability) {
-    if (_capturing) {
-        if (capability.width == _capability.width &&
-            capability.height == _capability.height &&
-            capability.rawType == _capability.rawType) {
-            // already started w/ same profile
-            return 0;
-        } else {
-            // profile changes, so stop
-            StopCapture();
-        }
-    }
-
-    webrtc::CriticalSectionScoped cs(_capture_cs);
-
-    // sensor_msgs::frame_encodings for capability
-    std::string frame_encoding;
-    switch (capability.rawType) {
-        case webrtc::kVideoUYVY:
-            frame_encoding = sensor_msgs::image_encodings::YUV422;
-            break;
-        case webrtc::kVideoRGB24:
-            frame_encoding = sensor_msgs::image_encodings::RGB8;
-            break;
-        default:
-            return -1;
-    }
-
-    // frames
-    FrameQueue frames;
-
-    //start capture thread;
-    if (_capture_thd == NULL) {
-        _capture_thd = webrtc::ThreadWrapper::CreateThread(
-            VideoCaptureModule::_capture, this, webrtc::kHighPriority
-        );
-        if (_capture_thd == NULL) {
-            return -1;
-        }
-        unsigned int id;
-        _capture_thd->Start(id);
-    }
-
-    // done
-    _frame_encoding = frame_encoding;
-    std::swap(_frames, _frames);
-    _capability = capability;
-    _capturing = true;
-
-    return 0;
-}
-
-int32_t VideoCaptureModule::StopCapture() {
-    if (_capture_thd != NULL) {
-        if (_capture_thd->Stop()) {
-            delete _capture_thd;
-            _capture_thd = NULL;
-        } else {
-            ROS_ERROR_STREAM("could not stop capture thread, leaking it ...");
-            assert(false);
-            _capture_thd = NULL;
-        }
-    }
-
-    {
-        webrtc::CriticalSectionScoped cs(_capture_cs);
-        if (_capturing) {
-            _capturing = false;
-            FrameQueue empty;
-            std::swap(empty, _frames);
-            _cb_q.clear();
-        }
-    }
-
-    return 0;
-}
-
-bool VideoCaptureModule::CaptureStarted() {
-    return _capturing;
-}
-
-int32_t VideoCaptureModule::CaptureSettings(webrtc::VideoCaptureCapability& settings) {
-    settings = _capability;
-    return 0;
-}
-
-
-// WebRtcVcmFactory
-
-WebRtcVcmFactory::~WebRtcVcmFactory() {
-}
-
-webrtc::VideoCaptureModule* WebRtcVcmFactory::Create(int id, const char* device) {
-    return VideoCaptureModule::Create(id, device);
-}
-
-webrtc::VideoCaptureModule::DeviceInfo* WebRtcVcmFactory::CreateDeviceInfo(int id) {
-    return VideoCaptureModule::CreateDeviceInfo(id);
-}
-
-void WebRtcVcmFactory::DestroyDeviceInfo(webrtc::VideoCaptureModule::DeviceInfo* info) {
-    // do nothing
 }

@@ -1,4 +1,4 @@
-#include "device.h"
+#include "host.h"
 
 #include <talk/app/webrtc/peerconnectioninterface.h>
 #include <talk/app/webrtc/videosourceinterface.h>
@@ -6,18 +6,19 @@
 #include <talk/media/webrtc/webrtcvideoencoderfactory.h>
 #include <talk/media/webrtc/webrtcvideodecoderfactory.h>
 
+#include "device_manager.h"
+#include "host.h"
 #include "util.h"
-#include "video_capture.h"
 
 
-// DeviceVideoSource
+// VideoSource
 
-DeviceVideoSource::DeviceVideoSource() :
+VideoSource::VideoSource() :
     type(NoneType),
     publish(false) {
 }
 
-DeviceVideoSource::DeviceVideoSource(
+VideoSource::VideoSource(
     Type type,
     const std::string& name,
     const std::string& label,
@@ -31,13 +32,12 @@ DeviceVideoSource::DeviceVideoSource(
     publish(publish) {
 }
 
+// AudioSource
 
-// DeviceAudioSource
-
-DeviceAudioSource::DeviceAudioSource() : publish(false) {
+AudioSource::AudioSource() : publish(false) {
 }
 
-DeviceAudioSource::DeviceAudioSource(
+AudioSource::AudioSource(
     const std::string& label_,
     const MediaConstraints& constraints_,
     bool publish_
@@ -47,10 +47,10 @@ DeviceAudioSource::DeviceAudioSource(
     publish (publish_) {
 }
 
-// DeviceFactory
+// HostFactory
 
-Device DeviceFactory::operator()() {
-    return Device(
+Host HostFactory::operator()() {
+    return Host(
         video_srcs,
         audio_src,
         session_constraints,
@@ -58,11 +58,11 @@ Device DeviceFactory::operator()() {
     );
 }
 
-// Device
+// Host
 
-Device::Device(
-    const std::vector<DeviceVideoSource>& video_srcs,
-    const DeviceAudioSource& audio_src,
+Host::Host(
+    const std::vector<VideoSource>& video_srcs,
+    const AudioSource& audio_src,
     const MediaConstraints& session_constraints,
     const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers
     ) :
@@ -72,18 +72,18 @@ Device::Device(
     _ice_servers(ice_servers) {
 }
 
-Device::Device(const Device& other) :
+Host::Host(const Host& other) :
     _video_srcs(other._video_srcs),
     _audio_src(other._audio_src),
     _session_constraints(other._session_constraints),
     _ice_servers(other._ice_servers) {
 }
 
-Device::~Device() {
+Host::~Host() {
     close();
 }
 
-bool Device::open() {
+bool Host::open() {
     _dc_rpub = _nh.advertise<ros_webrtc::Data>(topic_for("data_recv"), 1000, false);
     if (!_create_pc_factory()) {
         close();
@@ -100,11 +100,11 @@ bool Device::open() {
     return true;
 }
 
-bool Device::is_open() const {
+bool Host::is_open() const {
     return _pc_factory.get() != NULL;
 }
 
-void Device::close() {
+void Host::close() {
     _close_servers();
     _close_local_stream();
     _pc_factory.release();
@@ -113,7 +113,7 @@ void Device::close() {
     _dc_rpub.shutdown();
 }
 
-SessionPtr Device::begin_session(
+SessionPtr Host::begin_session(
     const std::string& peer_id,
     const MediaConstraints& sdp_constraints,
     const std::vector<ros_webrtc::DataChannel>& data_channels,
@@ -138,7 +138,7 @@ SessionPtr Device::begin_session(
     return s;
 }
 
-bool Device::end_session(const std::string& peer_id) {
+bool Host::end_session(const std::string& peer_id) {
     for (Sessions::iterator i = _sessions.begin(); i != _sessions.end(); i++) {
         if ((*i)->peer_id() == peer_id) {
             ROS_INFO_STREAM("ending session for peer '" << peer_id << "'");
@@ -151,15 +151,15 @@ bool Device::end_session(const std::string& peer_id) {
     return false;
 }
 
-Device::Sessions& Device::sessions() {
+Host::Sessions& Host::sessions() {
     return _sessions;
 }
 
-const Device::Sessions& Device::sessions() const {
+const Host::Sessions& Host::sessions() const {
     return _sessions;
 }
 
-Device::Flush Device::flush() {
+Host::Flush Host::flush() {
     Flush flush;
     for (Sessions::iterator i = _sessions.begin(); i != _sessions.end(); i++) {
         Session::Flush session_flush = (*i)->flush();
@@ -168,7 +168,7 @@ Device::Flush Device::flush() {
     return flush;
 }
 
-SessionPtr Device::session(const std::string& peer_id) {
+SessionPtr Host::session(const std::string& peer_id) {
     for (Sessions::iterator i = _sessions.begin(); i != _sessions.end(); i++) {
         if ((*i)->peer_id() == peer_id) {
             return (*i);
@@ -177,7 +177,7 @@ SessionPtr Device::session(const std::string& peer_id) {
     return SessionPtr();
 }
 
-SessionConstPtr Device::session(const std::string& peer_id) const {
+SessionConstPtr Host::session(const std::string& peer_id) const {
     for (Sessions::const_iterator i = _sessions.begin(); i != _sessions.end(); i++) {
         if ((*i)->peer_id() == peer_id) {
             return (*i);
@@ -186,7 +186,7 @@ SessionConstPtr Device::session(const std::string& peer_id) const {
     return SessionConstPtr();
 }
 
-bool Device::_create_pc_factory() {
+bool Host::_create_pc_factory() {
     _worker_thd.reset(new rtc::Thread());
     _worker_thd->SetName("worker_thread", NULL);
     if (!_worker_thd->Start()) {
@@ -221,7 +221,7 @@ bool Device::_create_pc_factory() {
     return true;
 }
 
-bool Device::_open_local_stream() {
+bool Host::_open_local_stream() {
     // stream
     std::stringstream ss;
     ss << "s" << 1;
@@ -230,10 +230,17 @@ bool Device::_open_local_stream() {
     ss.clear();
     _local_stream = _pc_factory->CreateLocalMediaStream(stream_label);
 
-    ROS_DEBUG_STREAM("creating device manager");
-    rtc::scoped_ptr<cricket::DeviceManagerInterface> dev_mgr(cricket::DeviceManagerFactory::Create());
-    if (!dev_mgr->Init()) {
-        ROS_ERROR_STREAM("cannot create device manager");
+    ROS_DEBUG_STREAM("creating system device manager");
+    rtc::scoped_ptr<cricket::DeviceManagerInterface> sys_dev_mgr(cricket::DeviceManagerFactory::Create());
+    if (!sys_dev_mgr->Init()) {
+        ROS_ERROR_STREAM("cannot create system device manager");
+        return false;
+    }
+
+    ROS_DEBUG_STREAM("creating ros device manager");
+    rtc::scoped_ptr<cricket::DeviceManagerInterface> ros_dev_mgr(new ROSDeviceManager());
+    if (!ros_dev_mgr->Init()) {
+        ROS_ERROR_STREAM("cannot create ros device manager");
         return false;
     }
 
@@ -257,56 +264,39 @@ bool Device::_open_local_stream() {
     }
     if (_audio_src.publish) {
         _audio_sink.reset(new AudioSink(
-            _nh,
-            topic_for("local", "audio_" + audio_track->id()),
-            audio_track
+            _nh, topic_for("local", "audio_" + audio_track->id()), audio_track
         ));
     }
     _local_stream->AddTrack(audio_track);
 
     // video tracks
     for (size_t i = 0; i != _video_srcs.size(); i++) {
-        const DeviceVideoSource& video_src = _video_srcs[i];
+        const VideoSource& video_src = _video_srcs[i];
+
+        // device manager
+        cricket::DeviceManagerInterface *dev_mgr = NULL;
+        switch (video_src.type) {
+            case VideoSource::SystemType:
+                dev_mgr = sys_dev_mgr.get();
+                break;
+            case VideoSource::ROSType:
+                dev_mgr = ros_dev_mgr.get();
+                break;
+            default:
+                ROS_ERROR("video source '%s' type '%d' not supported",video_src.name.c_str(), video_src.type);
+                return false;
+        }
 
         // capturer
-        std::auto_ptr<cricket::VideoCapturer> video_capturer;
-        switch (video_src.type) {
-            // native
-            case DeviceVideoSource::DeviceType: {
-                cricket::Device device;
-                if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &device)) {
-                    ROS_ERROR("cannot get video capture device for '%s'", video_src.name.c_str());
-                    return false;
-                }
-                video_capturer.reset(dev_mgr->CreateVideoCapturer(device));
-                if (video_capturer.get() == NULL) {
-                    ROS_ERROR("cannot cast video capture device for '%s'", video_src.name.c_str());
-                    return false;
-                }
-                break;
-            }
-
-            // ros-topic
-            case DeviceVideoSource::ROSTopicType: {
-                cricket::Device device(video_src.name, video_src.name);
-                std::auto_ptr<cricket::WebRtcVideoCapturer> webrtc_video_capturer(
-                    new cricket::WebRtcVideoCapturer(new WebRtcVcmFactory())
-                );
-                if (!webrtc_video_capturer->Init(device)) {
-                    ROS_ERROR("initialization for video capturer for '%s' failed", video_src.name.c_str());
-                    return false;
-                }
-                video_capturer.reset(webrtc_video_capturer.release());
-                break;
-            }
-
-            default: {
-                ROS_ERROR(
-                    "video source '%s' type '%d' is not supported",
-                    video_src.name.c_str(), video_src.type
-                );
-                return false;
-            }
+        cricket::Device device;
+        if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &device)) {
+            ROS_ERROR("cannot get video capture device for '%s'", video_src.name.c_str());
+            return false;
+        }
+        std::auto_ptr<cricket::VideoCapturer> video_capturer(dev_mgr->CreateVideoCapturer(device));
+        if (video_capturer.get() == NULL) {
+            ROS_ERROR("failed to create video capture device for '%s'", video_src.name.c_str());
+            return false;
         }
 
         // track
@@ -319,8 +309,7 @@ bool Device::_open_local_stream() {
         }
         rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
             _pc_factory->CreateVideoTrack(
-                video_label,
-                _pc_factory->CreateVideoSource(video_capturer.get(), &video_src.constraints)
+                video_label, _pc_factory->CreateVideoSource(video_capturer.get(), &video_src.constraints)
             )
         );
         if(video_track.get() == NULL) {
@@ -333,9 +322,7 @@ bool Device::_open_local_stream() {
         video_capturer.release();
         if (video_src.publish) {
             VideoRendererPtr video_renderer(new VideoRenderer(
-                _nh,
-                topic_for("local", "video_" + video_track->id()),
-                video_track
+                _nh, topic_for("local", "video_" + video_track->id()), video_track
             ));
             _video_renderers.push_back(video_renderer);
         }
@@ -345,7 +332,7 @@ bool Device::_open_local_stream() {
     return true;
 }
 
-void Device::_close_local_stream() {
+void Host::_close_local_stream() {
     _audio_sink.reset();
     while (!_video_renderers.empty()) {
         _video_renderers.pop_front();
@@ -353,22 +340,22 @@ void Device::_close_local_stream() {
     _local_stream = NULL;
 }
 
-bool Device::_open_servers() {
-    _rsrvs.push_back(_nh.advertiseService(service_for("connect"), &Device::_serve_connect, this));
-    _rsrvs.push_back(_nh.advertiseService(service_for("disconnect"), &Device::_serve_disconnect, this));
-    _rsrvs.push_back(_nh.advertiseService(service_for("ice_candidate"), &Device::_serve_ice_candidate, this));
-    _rsrvs.push_back(_nh.advertiseService(service_for("sdp_offer_answer"), &Device::_serve_sdp_offer_answer, this));
-    _rsrvs.push_back(_nh.advertiseService(service_for("sessions"), &Device::_serve_sessions, this));
-    _rsubs.push_back(_nh.subscribe(topic_for("data_send"), 1000, &Device::_handle_send, this));
+bool Host::_open_servers() {
+    _rsrvs.push_back(_nh.advertiseService(service_for("connect"), &Host::_serve_connect, this));
+    _rsrvs.push_back(_nh.advertiseService(service_for("disconnect"), &Host::_serve_disconnect, this));
+    _rsrvs.push_back(_nh.advertiseService(service_for("ice_candidate"), &Host::_serve_ice_candidate, this));
+    _rsrvs.push_back(_nh.advertiseService(service_for("sdp_offer_answer"), &Host::_serve_sdp_offer_answer, this));
+    _rsrvs.push_back(_nh.advertiseService(service_for("sessions"), &Host::_serve_sessions, this));
+    _rsubs.push_back(_nh.subscribe(topic_for("data_send"), 1000, &Host::_handle_send, this));
     return true;
 }
 
-void Device::_close_servers() {
+void Host::_close_servers() {
     _rsrvs.clear();
     _rsubs.clear();
 }
 
-bool Device::_serve_connect(ros::ServiceEvent<ros_webrtc::Connect::Request, ros_webrtc::Connect::Response>& event) {
+bool Host::_serve_connect(ros::ServiceEvent<ros_webrtc::Connect::Request, ros_webrtc::Connect::Response>& event) {
     const ros_webrtc::Connect::Request &req = event.getRequest();
     ROS_INFO_STREAM("serve 'connect' for peer " << req.peer_id);
     MediaConstraints sdp_constraints;
@@ -404,7 +391,7 @@ bool Device::_serve_connect(ros::ServiceEvent<ros_webrtc::Connect::Request, ros_
     return true;
 }
 
-bool Device::_serve_disconnect(ros::ServiceEvent<ros_webrtc::Disconnect::Request, ros_webrtc::Disconnect::Response>& event) {
+bool Host::_serve_disconnect(ros::ServiceEvent<ros_webrtc::Disconnect::Request, ros_webrtc::Disconnect::Response>& event) {
     const ros_webrtc::Disconnect::Request& req = event.getRequest();
     ROS_INFO_STREAM("serve 'disconnect' for peer " << req.peer_id);
     SessionPtr s(session(req.peer_id));
@@ -416,7 +403,7 @@ bool Device::_serve_disconnect(ros::ServiceEvent<ros_webrtc::Disconnect::Request
     return true;
 }
 
-bool Device::_serve_ice_candidate(ros::ServiceEvent<ros_webrtc::IceCandidate::Request, ros_webrtc::IceCandidate::Response>& event) {
+bool Host::_serve_ice_candidate(ros::ServiceEvent<ros_webrtc::IceCandidate::Request, ros_webrtc::IceCandidate::Response>& event) {
     const ros_webrtc::IceCandidate::Request &req = event.getRequest();
     ROS_INFO_STREAM("serve 'ice_candidate' for peer " << req.peer_id);
     SessionPtr s(session(req.peer_id));
@@ -431,7 +418,7 @@ bool Device::_serve_ice_candidate(ros::ServiceEvent<ros_webrtc::IceCandidate::Re
     return true;
 }
 
-bool Device::_serve_sdp_offer_answer(ros::ServiceEvent<ros_webrtc::SdpOfferAnswer::Request, ros_webrtc::SdpOfferAnswer::Response>& event) {
+bool Host::_serve_sdp_offer_answer(ros::ServiceEvent<ros_webrtc::SdpOfferAnswer::Request, ros_webrtc::SdpOfferAnswer::Response>& event) {
     const ros_webrtc::SdpOfferAnswer::Request &req = event.getRequest();
     ROS_INFO_STREAM("serve 'sdp_offer_answer' for peer " << req.peer_id);
     SessionPtr s(session(req.peer_id));
@@ -447,22 +434,22 @@ bool Device::_serve_sdp_offer_answer(ros::ServiceEvent<ros_webrtc::SdpOfferAnswe
     return true;
 }
 
-bool Device::_serve_sessions(ros::ServiceEvent<ros_webrtc::Sessions::Request, ros_webrtc::Sessions::Response>& event) {
-    Device::Sessions ss(sessions());
+bool Host::_serve_sessions(ros::ServiceEvent<ros_webrtc::Sessions::Request, ros_webrtc::Sessions::Response>& event) {
+    Host::Sessions ss(sessions());
     ros_webrtc::Sessions::Response& resp = event.getResponse();
-    for(Device::Sessions::iterator i = ss.begin(); i != ss.end(); i++)  {
+    for(Host::Sessions::iterator i = ss.begin(); i != ss.end(); i++)  {
         resp.peer_ids.push_back((*i)->peer_id());
     }
     return true;
 }
 
-void Device::_handle_send(const ros_webrtc::DataConstPtr& msg) {
+void Host::_handle_send(const ros_webrtc::DataConstPtr& msg) {
     webrtc::DataBuffer data_buffer(
         rtc::Buffer(&msg->buffer[0], msg->buffer.size()),
         msg->encoding == "binary"
     );
-    Device::Sessions ss(sessions());
-    for(Device::Sessions::iterator i = ss.begin(); i != ss.end(); i++)  {
+    Host::Sessions ss(sessions());
+    for(Host::Sessions::iterator i = ss.begin(); i != ss.end(); i++)  {
         Session::DataChannel* data_channel = (*i)->data_channel(msg->label);
         if (data_channel == NULL) {
             continue;
@@ -471,25 +458,25 @@ void Device::_handle_send(const ros_webrtc::DataConstPtr& msg) {
     }
 }
 
-// Device::Flush
+// Host::Flush
 
-Device::Flush& Device::Flush::operator += (const Session::Flush & rhs) {
+Host::Flush& Host::Flush::operator += (const Session::Flush & rhs) {
     reaped_data_messages += rhs.reaped_data_messages;
     return *this;
 }
 
-// Device::SessionObserver
+// Host::SessionObserver
 
-Device::SessionObserver::SessionObserver(
-    Device& instance_,
+Host::SessionObserver::SessionObserver(
+    Host& instance_,
     SessionPtr session_
     ) : instance(instance_), session(session_) {
 }
 
-Device::SessionObserver::~SessionObserver() {
+Host::SessionObserver::~SessionObserver() {
 }
 
-void Device::SessionObserver::on_connection_change(webrtc::PeerConnectionInterface::IceConnectionState state) {
+void Host::SessionObserver::on_connection_change(webrtc::PeerConnectionInterface::IceConnectionState state) {
     if (state == webrtc::PeerConnectionInterface::kIceConnectionDisconnected) {
         instance.end_session(session->peer_id());
     }

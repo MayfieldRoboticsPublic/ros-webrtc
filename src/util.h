@@ -1,10 +1,11 @@
-#ifndef WEBRTC_UTIL_H_
-#define WEBRTC_UTIL_H_
+#ifndef ROS_WEBRTC_UTIL_H_
+#define ROS_WEBRTC_UTIL_H_
 
 #include <string>
 
 /**
  * @brief Removes unsupported characters from a ROS name (see http://wiki.ros.org/Names#Valid_Names-1).
+ * @param group The name to normalize.
  * @return The normalized name.
  */
 std::string normalize_name(const std::string& name);
@@ -44,4 +45,4 @@ std::string param_for(const std::string& name);
  */
 std::string generate_id();
 
-#endif /* WEBRTC_UTIL_H_ */
+#endif /* ROS_WEBRTC_UTIL_H_ */

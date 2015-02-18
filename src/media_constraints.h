@@ -1,8 +1,11 @@
-#ifndef IXI_MEDIA_CONSTRAINTS_H_
-#define IXI_MEDIA_CONSTRAINTS_H_
+#ifndef ROS_WEBRTC_MEDIA_CONSTRAINTS_H_
+#define ROS_WEBRTC_MEDIA_CONSTRAINTS_H_
 
 #include <talk/app/webrtc/mediaconstraintsinterface.h>
 
+/**
+ * @class MediaConstraints
+ */
 class MediaConstraints : public webrtc::MediaConstraintsInterface {
 
 public:
@@ -33,4 +36,4 @@ private:
 
 };
 
-#endif /* IXI_MEDIA_CONSTRAINTS_H_ */
+#endif /* ROS_WEBRTC_MEDIA_CONSTRAINTS_H_ */

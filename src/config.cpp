@@ -11,7 +11,7 @@ Config Config::get() {
     XmlRpc::XmlRpcValue cameras_xml;
     if (nh.getParam(param_for("cameras/"), cameras_xml)) {
         for (XmlRpc::XmlRpcValue::iterator i = cameras_xml.begin(); i != cameras_xml.end(); i++) {
-            DeviceVideoSource camera;
+            VideoSource camera;
             if (_get(nh, ros::names::append(param_for("cameras/"), (*i).first), camera)) {
                 instance.cameras.push_back(camera);
             }
@@ -73,18 +73,18 @@ void Config::set() {
     }
 }
 
-bool Config::_get(ros::NodeHandle& nh, const std::string& root, DeviceVideoSource& value) {
+bool Config::_get(ros::NodeHandle& nh, const std::string& root, VideoSource& value) {
     if (!nh.getParam(ros::names::append(root, "name"), value.name)) {
         return false;
     }
     if (value.name.find("sys://") == 0) {
         value.name = value.name.substr(6);
-        value.type = DeviceVideoSource::DeviceType;
+        value.type = VideoSource::SystemType;
     } else if (value.name.find("ros://") == 0) {
         value.name = value.name.substr(6);
-        value.type = DeviceVideoSource::ROSTopicType;
+        value.type = VideoSource::ROSType;
     } else {
-        value.type = DeviceVideoSource::DeviceType;
+        value.type = VideoSource::SystemType;
     }
     nh.getParam(ros::names::append(root, "label"), value.label);
     if (!_get(nh, ros::names::append(root, "constraints"), value.constraints)) {
@@ -94,10 +94,10 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, DeviceVideoSourc
     return true;
 }
 
-void Config::_set(ros::NodeHandle& nh, const std::string& root, const DeviceVideoSource& value) {
+void Config::_set(ros::NodeHandle& nh, const std::string& root, const VideoSource& value) {
     std::string scheme;
     switch (value.type) {
-        case DeviceVideoSource::ROSTopicType:
+        case VideoSource::ROSType:
             scheme = "ros://";
             break;
     }
@@ -107,7 +107,7 @@ void Config::_set(ros::NodeHandle& nh, const std::string& root, const DeviceVide
     nh.setParam(ros::names::append(root, "publish"), value.publish);
 }
 
-bool Config::_get(ros::NodeHandle& nh, const std::string& root, DeviceAudioSource& value) {
+bool Config::_get(ros::NodeHandle& nh, const std::string& root, AudioSource& value) {
     nh.getParam(ros::names::append(root, "label"), value.label);
     if (!_get(nh, ros::names::append(root, "constraints"), value.constraints)) {
         return false;
@@ -116,7 +116,7 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, DeviceAudioSourc
     return true;
 }
 
-void Config::_set(ros::NodeHandle& nh, const std::string& root, const DeviceAudioSource& value) {
+void Config::_set(ros::NodeHandle& nh, const std::string& root, const AudioSource& value) {
     nh.setParam(ros::names::append(root, "label"), value.label);
     _set(nh, ros::names::append(root, "constraints"), value.constraints);
     nh.setParam(ros::names::append(root, "publish"), value.publish);

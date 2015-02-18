@@ -1,5 +1,5 @@
-#ifndef WEBRTC_SESSION_H_
-#define WEBRTC_SESSION_H_
+#ifndef ROS_WEBRTC_SESSION_H_
+#define ROS_WEBRTC_SESSION_H_
 
 #include <list>
 
@@ -17,8 +17,8 @@
 class Device;
 
 /**
- * @class Device
- * @brief Represents a connection between this Device and a peer.
+ * @class Session
+ * @brief Represents a peer connection.
  */
 class Session {
 
@@ -84,11 +84,14 @@ public:
      */
     void end();
 
+    /**
+     * @brief Initiate connection to remote peer.
+     */
     bool connect();
 
     bool create_offer();
 
-    bool is_offerer();
+    bool is_offerer() const;
 
     void create_answer();
 
@@ -138,7 +141,7 @@ private:
 
         bool is_complete() const;
 
-        size_t send(webrtc::DataChannelInterface* provider);
+        size_t operator()(webrtc::DataChannelInterface* provider);
 
         const std::string id;
 
@@ -304,4 +307,4 @@ typedef boost::shared_ptr<Session> SessionPtr;
 typedef boost::shared_ptr<const Session> SessionConstPtr;
 
 
-#endif /* WEBRTC_SESSION_H_ */
+#endif /* ROS_WEBRTC_SESSION_H_ */

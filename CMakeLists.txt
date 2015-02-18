@@ -121,25 +121,26 @@ include_directories(
 # )
 
 ## Declare a cpp executable
-add_executable(device
+add_executable(host
    src/main.cpp
    src/config.cpp
-   src/device.cpp
+   src/host.cpp
    src/media_constraints.cpp
    src/renderer.cpp
+   src/device_manager.cpp
+   src/video_capture.cpp
    src/session.cpp
    src/util.cpp
-   src/video_capture.cpp
 )
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
-add_dependencies(device
+add_dependencies(host
   ros_webrtc_generate_messages_cpp
 )
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(device
+target_link_libraries(host
   ${catkin_LIBRARIES}
   ${jingle_STATIC_LDFLAGS}
   ${jsoncpp_STATIC_LDFLAGS}
@@ -149,7 +150,7 @@ target_link_libraries(device
 
 ## Specify additional compile flags
 foreach(cxx_flag "-std=c++11" ${jingle_CFLAGS} ${jsoncpp_CFLAGS})
-  set_property(TARGET device APPEND_STRING PROPERTY COMPILE_FLAGS " ${cxx_flag}")
+  set_property(TARGET host APPEND_STRING PROPERTY COMPILE_FLAGS " ${cxx_flag}")
 endforeach(cxx_flag)
 
 #############

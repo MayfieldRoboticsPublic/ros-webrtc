@@ -1,5 +1,4 @@
-ros-webrtc
-==========
+# ros-webrtc
 
 ROS node for managing [WebRTC](http://www.webrtc.org/):
 
@@ -7,10 +6,9 @@ ROS node for managing [WebRTC](http://www.webrtc.org/):
 - **video**
 - **data**
 
-streaming sessions using [Google's implementation](https://code.google.com/p/libjingle/).
+streams using [Google's implementation](https://code.google.com/p/libjingle/).
 
-dev
-===
+## dev
 
 ```bash
 $ git clone git@github.com:ixirobot/ros-webtc.git
@@ -19,30 +17,26 @@ $ cd ros-webtc-build
 $ cmake -G"Eclipse CDT4 - Unix Makefiles" -D CMAKE_BUILD_TYPE=Debug ../ros-webtc/
 ```
 
-usage
-=====
+## usage
 
-`ros-webrtc` intentionally exposes **only** use-case agnostic WebRTC
-functionality.
-
-It's up to you to e.g.:
+`ros-webrtc` **only** exposes WebRTC functionality not tied to a particular use
+case. It's up to you to e.g.:
 
 - Describe the session you want (e.g. video and audio tracks, data channels, etc).
 - Coordinate signaling (e.g. ICE and SDP message exchange, etc).
 
-so typically your project will implement:
+Typically your project will implement:
 
-- Ingress (from **remote peer**) signaling ROS service(s).
-- Egress (from **local device**) signaling ROS service(s)
-- Data-channel bridge as a ROS publisher/subscriber for moving data to/from **remote peer** and **local device**.
+- Signaling ROS service.
+- Bridge for moving data to/from a remote peer.
 
 then:
 
-- Register `ros-webrtc` as a `<build_depend/>` and `<run_depend/>`.
+- Register `ros_webrtc` as a `<build_depend/>` and `<run_depend/>`.
 
 and that's it.
 
-Here's e.g. of an **ingress** signaling implementation linking
+Here's e.g. of the **ingress** signaling ROS service linking
 [pubnub](http://www.pubnub.com/) signals to the corresponding `ros_webrtc` ROS
 service(s):
 
@@ -134,8 +128,7 @@ class SignalSubscriber(object):
         )
 ```
 
-device
-------
+## device
 
 This ROS node exposes all WebRTC functionality:
 
@@ -148,8 +141,8 @@ and is configured via `rosparam`:
 ```bash
 $ rosparam get /ros_webrtc
 cameras:
-  downward: {label: downward, name: Loopback video device 0}
-  upward: {label: upward, name: Loopback video device 1}
+  downward: {label: downward, name: sys://Loopback video device 0}
+  upward: {label: upward, name: sys://Loopback video device 1}
 ice_servers:
 - {uri: 'stun:stun.services.mozilla.com:3478'}
 - {uri: 'stun:stun.l.google.com:19302'}
@@ -158,10 +151,12 @@ session:
     optional: {DtlsSrtpKeyAgreement: 'true'}
 ```
 
-all other configuration is per-session and passed to `device` via `ros_webrtc`
-services:
+All other configuration is per-session and passed to `device` using
+`ros_webrtc` services:
 
 - `srv/Connect.srv`
 - `srv/Disconnect.srv`
 - `srv/IceCandidate.srv`
 - `srv/SdpOfferAnswer.srv`
+
+when setting up a connection to a peer.

@@ -1,71 +1,70 @@
 #include <stdio.h>
 
 #include <ros/ros.h>
-#include <signal.h>
 #include <webrtc/base/ssladapter.h>
 
 #include "config.h"
-#include "device.h"
+#include "host.h"
 
 
 struct Flush {
 
-    Flush(Device& device_) : device(device_) {}
+    Flush(Host& host) : host(host) {}
 
     void operator () (const ros::WallTimerEvent& event) {
-        device.flush();
+        host.flush();
     }
 
-    Device &device;
+    Host &host;
 
 };
 
 int main(int argc, char **argv) {
-    ROS_INFO_STREAM("initializing ros");
+    ROS_INFO("initializing ros");
     ros::init(argc, argv, "webrtc", ros::init_options::AnonymousName);
 
-    ROS_INFO_STREAM("loading config");
+    ROS_INFO("loading config");
     Config config(Config::get());
 
-    ROS_INFO_STREAM("initializing ssl");
+    ROS_INFO("initializing ssl");
     if (!rtc::InitializeSSL()) {
-        ROS_ERROR_STREAM("ssl initialization failed");
+        ROS_ERROR("ssl initialization failed");
         return 1;
     }
 
-    ROS_INFO_STREAM("creating device");
-    DeviceFactory device_factory;
-    device_factory.audio_src = config.microphone;
+    ROS_INFO("creating host");
+    HostFactory host_factory;
+    host_factory.audio_src = config.microphone;
     for(size_t i = 0; i != config.cameras.size(); i++) {
-        device_factory.video_srcs.push_back(config.cameras[i]);
+        host_factory.video_srcs.push_back(config.cameras[i]);
     }
     for(size_t i = 0; i != config.ice_servers.size(); i++) {
-        device_factory.ice_servers.push_back(config.ice_servers[i]);
+        host_factory.ice_servers.push_back(config.ice_servers[i]);
     }
-    device_factory.session_constraints = config.session_constraints;
-    Device device(device_factory());
+    host_factory.session_constraints = config.session_constraints;
+    Host host = host_factory();
 
-    ROS_INFO_STREAM("opening device ... ");
-    if (!device.open()) {
-        ROS_INFO_STREAM("device open failed");
+    ROS_INFO("opening host ... ");
+    if (!host.open()) {
+        ROS_INFO("host open failed");
         return 2;
     }
-    ROS_INFO_STREAM("opened device");
+    ROS_INFO("opened host");
 
-    ROS_INFO_STREAM("scheduling device flush every " << config.flush_frequency << " sec(s) ... ");
+    ROS_INFO("scheduling host flush every %d sec(s) ... ", config.flush_frequency);
     ros::NodeHandle nh;
-    Flush flush(device);
+    Flush flush(host);
     ros::WallTimer flush_timer = nh.createWallTimer(
         ros::WallDuration(config.flush_frequency), flush, false
     );
 
-    ROS_INFO_STREAM("start spinning");
+    ROS_INFO("start spinning");
     ros::spin();
-    ROS_INFO_STREAM("stop spinning");
+    ROS_INFO("stop spinning");
 
-    ROS_INFO_STREAM("closing device ...");
-    device.close();
-    ROS_INFO_STREAM("closed device");
+    ROS_INFO("closing host ...");
+    host.close();
+    ROS_INFO("closed host");
 
     return 0;
 }

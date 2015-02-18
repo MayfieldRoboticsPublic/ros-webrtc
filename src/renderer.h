@@ -1,5 +1,5 @@
-#ifndef WEBRTC_RENDERER_H_
-#define WEBRTC_RENDERER_H_
+#ifndef ROS_WEBRTC_RENDERER_H_
+#define ROS_WEBRTC_RENDERER_H_
 
 #include <string>
 
@@ -200,4 +200,4 @@ public:
 
 };
 
-#endif /* WEBRTC_RENDERER_H_ */
+#endif /* ROS_WEBRTC_RENDERER_H_ */
