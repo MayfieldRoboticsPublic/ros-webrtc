@@ -14,7 +14,7 @@ streams using [Google's implementation](https://code.google.com/p/libjingle/).
 $ git clone git@github.com:ixirobot/ros-webtc.git
 $ mkdir ros-webtc-build
 $ cd ros-webtc-build
-$ cmake -G"Eclipse CDT4 - Unix Makefiles" -D CMAKE_BUILD_TYPE=Debug ../ros-webtc/
+$ cmake -G"Eclipse CDT4 - Unix Makefiles" -D CMAKE_BUILD_TYPE=Debug ../ros-webrtc/
 ```
 
 ## usage
