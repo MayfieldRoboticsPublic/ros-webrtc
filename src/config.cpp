@@ -3,9 +3,8 @@
 #include "util.h"
 
 
-Config Config::get() {
+Config Config::get(ros::NodeHandle& nh) {
     Config instance;
-    ros::NodeHandle nh;
 
     // cameras
     XmlRpc::XmlRpcValue cameras_xml;
@@ -17,7 +16,7 @@ Config Config::get() {
             }
         }
     } else {
-        ROS_INFO_STREAM("missing 'cameras/' param");
+        ROS_INFO("missing 'cameras/' param");
     }
 
     // microphone
@@ -36,14 +35,14 @@ Config Config::get() {
             }
         }
     } else {
-        ROS_INFO_STREAM("missing 'ice_servers/' param");
+        ROS_INFO("missing 'ice_servers/' param");
     }
 
     // flush_frequency
     instance.flush_frequency = 10 * 60;  // 10 minutes
     if (nh.hasParam(param_for("flush_frequency"))) {
         if (!nh.getParam(param_for("flush_frequency"), instance.flush_frequency)) {
-            ROS_INFO_STREAM("'flush_frequency' param type not int");
+            ROS_INFO("'flush_frequency' param type not int");
         }
     }
 

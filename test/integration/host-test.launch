@@ -1,0 +1,12 @@
+<launch>
+    <node name="play" pkg="rosbag" type="play" args="/tmp/ros_webrtc/sim_2015-02-23-15-14-55.bag --loop" />
+    
+    <node name="host" pkg="ros_webrtc" type="host">
+        <rosparam file="$(find ros_webrtc)/test/params/cameras.yaml" ns="cameras" />
+        <rosparam file="$(find ros_webrtc)/test/params/session.yaml" ns="session" />
+        <rosparam file="$(find ros_webrtc)/test/params/ice_servers.yaml" ns="ice_servers" />
+        <param name="flush_frequency"  value="60.0" type="double" />
+    </node>
+    
+    <test test-name="host_test" pkg="ros_webrtc" type="host_test.py" />
+</launch>

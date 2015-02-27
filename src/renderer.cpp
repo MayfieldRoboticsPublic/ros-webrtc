@@ -93,30 +93,38 @@ void VideoRenderer::RenderFrame(const cricket::VideoFrame* frame) {
 // DataObserver
 
 DataObserver::DataObserver(
-    ros::Publisher& rpub,
+    ros::NodeHandle& nh,
+    const std::string& topic,
     webrtc::DataChannelInterface* data_channel
     ) :
-    _data_channel(data_channel),
-    _rpub(rpub) {
-    ROS_INFO_STREAM("registering data renderer for '" << _data_channel->label() << "' to '" << _rpub.getTopic() << "'");
-    _data_channel->RegisterObserver(this);
+    _dc(data_channel),
+    _rpub(nh.advertise<ros_webrtc::Data>(topic, 1000)) {
+    ROS_INFO(
+        "registering data renderer for '%s' to '%s'",
+        _dc->label().c_str(), _rpub.getTopic().c_str()
+    );
+    _dc->RegisterObserver(this);
 }
 
 DataObserver::~DataObserver() {
-    ROS_INFO_STREAM("registering data renderer for '" << _data_channel->label() << "'");
-    _data_channel->UnregisterObserver();
+    ROS_INFO("registering data renderer for '%s'", _dc->label().c_str());
+    _dc->UnregisterObserver();
 }
 
 void DataObserver::OnStateChange() {
-    ROS_INFO_STREAM("data state change for '" << _data_channel->label() << "' to '" << _data_channel->state() << "'");
+    ROS_INFO(
+        "data state change for '%s' to '%d'",
+        _dc->label().c_str(), _dc->state()
+    );
 }
 
 // UnchunkedDataObserver
 
 UnchunkedDataObserver::UnchunkedDataObserver(
-    ros::Publisher& rpub,
+    ros::NodeHandle& nh,
+    const std::string& topic,
     webrtc::DataChannelInterface* data_channel
-    ) : DataObserver(rpub, data_channel) {
+    ) : DataObserver(nh, topic, data_channel) {
 }
 
 size_t UnchunkedDataObserver::reap() {
@@ -124,13 +132,12 @@ size_t UnchunkedDataObserver::reap() {
 }
 
 void UnchunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
-    ROS_INFO_STREAM(
-        "data message for '" << _data_channel->label() << "' - "
-        << "binary=" << buffer.binary << ", "
-        << "size=" << buffer.data.length()
+    ROS_INFO(
+        "data message for '%s' - binary=%s, size=%zu",
+        _dc->label().c_str(), buffer.binary ? "true" : "false", buffer.data.length()
     );
     ros_webrtc::Data msg;
-    msg.label = _data_channel->label();
+    msg.label = _dc->label();
     msg.encoding = buffer.binary ? "utf-8" : "binary";
     msg.buffer.insert(
         msg.buffer.end(),
@@ -143,9 +150,10 @@ void UnchunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
 // ChunkedDataObserver
 
 ChunkedDataObserver::ChunkedDataObserver(
-    ros::Publisher& rpub,
+    ros::NodeHandle& nh,
+    const std::string& topic,
     webrtc::DataChannelInterface* data_channel
-    ) : DataObserver(rpub, data_channel) {
+    ) : DataObserver(nh, topic, data_channel) {
 }
 
 size_t ChunkedDataObserver::reap() {
@@ -154,7 +162,7 @@ size_t ChunkedDataObserver::reap() {
     while (i != _messages.end()) {
         if ((*i).second->is_expired()) {
             ROS_WARN_STREAM(
-                "data message for '" << _data_channel->label()
+                "data message for '" << _dc->label()
                 << "' w/" << " id "  << (*i).second->id << " expired @" << (*i).second->expires_at
                 << ", discarding ... "
             );
@@ -169,7 +177,7 @@ size_t ChunkedDataObserver::reap() {
 
 void ChunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     ROS_INFO_STREAM(
-        "data message for '" << _data_channel->label() << "' - "
+        "data message for '" << _dc->label() << "' - "
         << "binary=" << buffer.binary << ", "
         << "size=" << buffer.data.length()
     );
@@ -184,7 +192,7 @@ void ChunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     );
     if (!parsingSuccessful) {
         ROS_WARN_STREAM(
-            "data message for '" << _data_channel->label() << "' malformed - "
+            "data message for '" << _dc->label() << "' malformed - "
             << reader.getFormattedErrorMessages()
         );
         return;
@@ -197,7 +205,7 @@ void ChunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
         !chunk.isMember("index") || !chunk["index"].isUInt() ||
         !chunk.isMember("data") || !chunk["data"].isString()) {
         ROS_WARN_STREAM(
-            "data message for '" << _data_channel->label() << "' invalid"
+            "data message for '" << _dc->label() << "' invalid"
         );
         return;
     }
@@ -223,7 +231,7 @@ void ChunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     if (message->is_complete()) {
         _messages.erase(chunk["id"].asString());
         ros_webrtc::Data msg;
-        msg.label = _data_channel->label();
+        msg.label = _dc->label();
         message->merge(msg);
         _rpub.publish(msg);
     }

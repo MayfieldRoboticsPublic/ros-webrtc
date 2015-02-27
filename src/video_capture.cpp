@@ -5,7 +5,7 @@
 #include <sensor_msgs/Image.h>
 #include <webrtc/system_wrappers/interface/ref_count.h>
 
-// VideoCaptureModule
+// ROSVideoCaptureModule
 
 ROSVideoCaptureModule::ROSVideoCaptureModule(int32_t id) :
     VideoCaptureImpl(id),
@@ -26,29 +26,21 @@ ROSVideoCaptureModule::~ROSVideoCaptureModule() {
 }
 
 int32_t ROSVideoCaptureModule::init(const char* deviceUniqueIdUTF8) {
-    // find topic by unique id
-    ros::master::V_TopicInfo topics;
-    if (!ros::master::getTopics(topics)) {
-        ROS_WARN_STREAM("failed to get topics");
+    try {
+        _subscriber = _nh.subscribe(
+            deviceUniqueIdUTF8,
+            1,
+            &ROSVideoCaptureModule::_image_callback,
+            this
+        );
+    }
+    catch (ros::Exception& ex) {
+        ROS_ERROR(
+            "subscribe to video capture device topic '%s' failed - %s",
+            deviceUniqueIdUTF8, ex.what()
+        );
         return -1;
     }
-    size_t index = -1;
-    for (size_t i = 0; i < topics.size(); i++) {
-        const ros::master::TopicInfo& topic = topics[i];
-        if (topic.datatype == "sensor_msgs/Image" && topic.name == deviceUniqueIdUTF8) {
-            index = i;
-            break;
-        }
-    }
-    if (index == -1) {
-        ROS_ERROR("no matching device  for '%s' found", deviceUniqueIdUTF8);
-        return -1;
-    }
-    _topic = topics[index].name;
-
-    // subscribe to the topic
-    _subscriber = _nh.subscribe(_topic, 1, &ROSVideoCaptureModule::_image_callback, this);
-
     return 0;
 }
 
@@ -173,32 +165,63 @@ int32_t ROSVideoCaptureModule::CaptureSettings(webrtc::VideoCaptureCapability& s
     return 0;
 }
 
+// ROSVideoCaptureTopicInfo
+
+ROSVideoCaptureTopicInfo ROSVideoCaptureTopicInfo::scan() {
+    std::vector<ros::master::TopicInfo> topics;
+    ros::master::V_TopicInfo candidates;
+    if (!ros::master::getTopics(candidates)) {
+        throw std::runtime_error("failed to get topics");
+    }
+    for (size_t i = 0; i < candidates.size(); i++) {
+        const ros::master::TopicInfo& topic = candidates[i];
+        if (topic.datatype != "sensor_msgs/Image")
+            continue;
+        ROS_INFO(
+            "found ros video capture device - topic '%s', data type '%s'",
+            topic.name.c_str(), topic.datatype.c_str()
+        );
+        topics.push_back(topic);
+    }
+    return ROSVideoCaptureTopicInfo(topics);
+}
+
+ROSVideoCaptureTopicInfo::ROSVideoCaptureTopicInfo() {
+}
+
+ROSVideoCaptureTopicInfo::ROSVideoCaptureTopicInfo(
+    const std::vector<ros::master::TopicInfo> &values
+    ) : _values(values) {
+}
+
+void ROSVideoCaptureTopicInfo::add(const std::string& name) {
+    _values.push_back(ros::master::TopicInfo(name, "sensor_msgs/Image"));
+}
+
+int ROSVideoCaptureTopicInfo::find(const std::string& name) const {
+    for (size_t i = 0; i != _values.size(); i++) {
+        if (_values[i].name == name) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 // ROSVideoCaptureDeviceInfo
 
-ROSVideoCaptureDeviceInfo::ROSVideoCaptureDeviceInfo(
-    const int32_t id
-    ) : DeviceInfoImpl(id) {
+ROSVideoCaptureDeviceInfo::ROSVideoCaptureDeviceInfo(const int32_t id) : DeviceInfoImpl(id) {
 }
 
 ROSVideoCaptureDeviceInfo::~ROSVideoCaptureDeviceInfo() {
 }
 
+bool ROSVideoCaptureDeviceInfo::init(ROSVideoCaptureTopicInfoConstPtr topics) {
+    _topics = topics;
+    return true;
+}
+
 uint32_t ROSVideoCaptureDeviceInfo::NumberOfDevices() {
-    // count all published topics w/ date-type sensor_msgs/Image
-    uint32_t count = 0;
-    ros::master::V_TopicInfo topics;
-    if (!ros::master::getTopics(topics)) {
-        ROS_WARN_STREAM("failed to get topics");
-        return count;
-    }
-    std::sort(topics.begin(), topics.end(), topic_name_less_than());
-    for (size_t i = 0; i < topics.size(); i++) {
-        const ros::master::TopicInfo& topic = topics[i];
-        if (topic.datatype == "sensor_msgs/Image") {
-            count++;
-        }
-    }
-    return count;
+    return _topics->size();
 }
 
 int32_t ROSVideoCaptureDeviceInfo::GetDeviceName(
@@ -210,26 +233,11 @@ int32_t ROSVideoCaptureDeviceInfo::GetDeviceName(
     char* productUniqueIdUTF8,
     uint32_t productUniqueIdUTF8Length
     ) {
-    // find topic by index (brittle)
-    ros::master::V_TopicInfo topics;
-    if (!ros::master::getTopics(topics)) {
-        ROS_WARN_STREAM("failed to get topics");
+    // find topic by index
+    if (_topics->size() <= deviceNumber) {
         return -1;
     }
-    std::sort(topics.begin(), topics.end(), topic_name_less_than());
-    size_t i = 0, number = 0, index = 0;
-    for (; i < topics.size(); i++) {
-        const ros::master::TopicInfo& topic = topics[i];
-        if (topic.datatype == "sensor_msgs/Image") {
-            if (number == deviceNumber)
-                break;
-            number++;
-        }
-    }
-    if (number != deviceNumber) {
-        return -1;
-    }
-    const ros::master::TopicInfo& topic = topics[i];
+    const ros::master::TopicInfo& topic = _topics->get(deviceNumber);
 
     // output topic name to id
     if (deviceNameLength >= topic.name.size() + 1) {
@@ -250,42 +258,15 @@ int32_t ROSVideoCaptureDeviceInfo::GetDeviceName(
     return 0;
 }
 
-int32_t ROSVideoCaptureDeviceInfo::CreateCapabilityMap (const char* deviceUniqueIdUTF8) {
+int32_t ROSVideoCaptureDeviceInfo::CreateCapabilityMap(const char* deviceUniqueIdUTF8) {
     // find topic by unique id
-    ros::master::V_TopicInfo topics;
-    if (!ros::master::getTopics(topics)) {
-        ROS_WARN_STREAM("failed to get topics");
+    int i = _topics->find(deviceUniqueIdUTF8);
+    if (i == -1)
         return -1;
-    }
-    size_t index = -1;
-    for (size_t i = 0; i < topics.size(); i++) {
-        const ros::master::TopicInfo& topic = topics[i];
-        if (topic.datatype == "sensor_msgs/Image" && topic.name == deviceUniqueIdUTF8) {
-            index = i;
-            break;
-        }
-    }
-    if (index == -1) {
-        ROS_ERROR_STREAM("no matching device  for '" << deviceUniqueIdUTF8 << "'found");
-        return -1;
-    }
-    const ros::master::TopicInfo& topic = topics[index];
+    const ros::master::TopicInfo& topic = _topics->get(i);
 
     webrtc::RawVideoType formats[] {
-//        webrtc::kVideoI420,
-//        webrtc::kVideoYV12,
-//        webrtc::kVideoYUY2,
-//        webrtc::kVideoUYVY,
-//        webrtc::kVideoIYUV,
-//        webrtc::kVideoARGB,
         webrtc::kVideoRGB24,
-//        webrtc::kVideoRGB565,
-//        webrtc::kVideoARGB4444,
-//        webrtc::kVideoARGB1555,
-//        webrtc::kVideoMJPEG,
-//        webrtc::kVideoNV12,
-//        webrtc::kVideoNV21,
-//        webrtc::kVideoBGRA,
     };
 
     unsigned int sizes[][2] = {

@@ -87,7 +87,8 @@ class DataObserver : public webrtc::DataChannelObserver {
 public:
 
     DataObserver(
-        ros::Publisher& rpub,
+        ros::NodeHandle& nh,
+        const std::string& topic,
         webrtc::DataChannelInterface* data_channel
     );
 
@@ -97,7 +98,7 @@ public:
 
 protected:
 
-    rtc::scoped_refptr<webrtc::DataChannelInterface> _data_channel;
+    rtc::scoped_refptr<webrtc::DataChannelInterface> _dc;
 
     ros::Publisher _rpub;
 
@@ -114,7 +115,8 @@ class UnchunkedDataObserver : public DataObserver {
 public:
 
     UnchunkedDataObserver(
-        ros::Publisher& rpub,
+        ros::NodeHandle& nh,
+        const std::string& topic,
         webrtc::DataChannelInterface* data_channel
     );
 
@@ -137,7 +139,8 @@ class ChunkedDataObserver : public DataObserver {
 public:
 
     ChunkedDataObserver(
-        ros::Publisher& rpub,
+        ros::NodeHandle& nh,
+        const std::string& topic,
         webrtc::DataChannelInterface* data_channel
     );
 

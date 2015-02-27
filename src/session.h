@@ -12,45 +12,51 @@
 #include <webrtc/base/scoped_ref_ptr.h>
 
 #include "media_constraints.h"
+#include "media_type.h"
 #include "renderer.h"
 
 class Device;
 
 /**
- * @class Session
- * @brief Represents a peer connection.
+ * \brief Represents a peer connection.
  */
 class Session {
 
 public:
 
     /**
-     * @brief Creates an initial session.
-     * @param peer_id Unique string identifying the remote peer.
-     * @param local_stream The local video and audio tracks for the device as a stream to share with the peer.
-     * @param sdp_constraints Media constraints to apply for this session.
-     * @param dc_rpub The ROS publisher to use to publish sending data channel messages.
-     * @param dc_inits Data channel settings (e.g. label, reliability, ordering, etc).
-     * @param service_names Names of ROS services to use for signaling (e.g. ice-candidates, sdp-offer-answers, etc).
+     * \brief Creates an initial session.
+     * \param id String identifying the session.
+     * \param peer_id String identifying the remote peer.
+     * \param local_stream The local video and audio tracks for the device as a stream to share with the peer.
+     * \param sdp_constraints Media constraints to apply for this session.
+     * \param dcs Data channel settings (e.g. label, reliability, ordering, etc).
+     * \param service_names Names of ROS services to use for signaling (e.g. ice-candidates, sdp-offer-answers, etc).
      */
     Session(
+        const std::string& id,
         const std::string& peer_id,
         webrtc::MediaStreamInterface* local_stream,
         const MediaConstraints& sdp_constraints,
-        ros::Publisher& dc_rpub,
-        const std::vector<ros_webrtc::DataChannel>& dc_confs,
+        const std::vector<ros_webrtc::DataChannel>& dcs,
         const std::map<std::string, std::string>& service_names
     );
 
     /**
-     * @brief Unique string identifying the remote peer.
-     * @return Remote peer identifier.
+     * \brief String identifying this session.
+     * \return Session identifier.
+     */
+    const std::string& id() const;
+
+    /**
+     * \brief String identifying the remote peer for this session.
+     * \return Peer identifier.
      */
     const std::string& peer_id() const;
 
     /**
-     * @class Observer
-     * @brief Callback interface used to observe session life-cycle.
+     * \class Observer
+     * \brief Callback interface used to observe session life-cycle.
      */
     class Observer {
 
@@ -65,12 +71,12 @@ public:
     typedef boost::shared_ptr<Observer> ObserverPtr;
 
     /**
-     * @brief Initiate connection to remote peer for this session.
-     * @param pc_factory Factory used to create a peer connection.
-     * @param pc_constraints Constraints to apply to the connection.
-     * @param ice_servers Collection of servers to use for ICE (connection negotiation).
-     * @param observer Optional observer to call on various session life-cycle events (e.g. disconnect).
-     * @return Whether initiation of peer connection succeeded.
+     * \brief Initiate connection to remote peer for this session.
+     * \param pc_factory Factory used to create a peer connection.
+     * \param pc_constraints Constraints to apply to the connection.
+     * \param ice_servers Collection of servers to use for ICE (connection negotiation).
+     * \param observer Optional observer to call on various session life-cycle events (e.g. disconnect).
+     * \return Whether initiation of peer connection succeeded.
      */
     bool begin(
         webrtc::PeerConnectionFactoryInterface* pc_factory,
@@ -80,14 +86,9 @@ public:
     );
 
     /**
-     * @brief Teardown connection to remote peer, ending this session.
+     * \brief Teardown connection to remote peer, ending this session.
      */
     void end();
-
-    /**
-     * @brief Initiate connection to remote peer.
-     */
-    bool connect();
 
     bool create_offer();
 
@@ -105,9 +106,17 @@ public:
 
         DataChannel(const ros_webrtc::DataChannel& conf);
 
-        void send(webrtc::DataBuffer& data_buffer, bool transfer=true);
+        void send(const ros_webrtc::DataConstPtr& msg);
+
+        void send(webrtc::DataBuffer& data_buffer);
+
+        bool is_chunked() const;
+
+        size_t chunk_size() const;
 
         const ros_webrtc::DataChannel conf;
+
+        MediaType protocol;
 
         rtc::scoped_refptr<webrtc::DataChannelInterface> provider;
 
@@ -115,19 +124,21 @@ public:
 
         Observers observers;
 
+        ros::Subscriber subscriber;
+
     };
 
     DataChannel* data_channel(const std::string& label);
 
     const DataChannel* data_channel(const std::string& label) const;
 
-    struct Flush {
+    struct FlushStats {
 
         size_t reaped_data_messages;
 
     };
 
-    Flush flush();
+    FlushStats flush();
 
 private:
 
@@ -154,22 +165,6 @@ private:
         size_t current;
 
     };
-
-    bool _open_peer_connection(
-        webrtc::PeerConnectionFactoryInterface* pc_factory,
-        const webrtc::MediaConstraintsInterface* pc_constraints,
-        const webrtc::PeerConnectionInterface::IceServers& ice_servers
-    );
-
-    void _close_peer_connection();
-
-    bool _open_service_clients();
-
-    void _close_service_clients();
-
-    void _on_local_description(webrtc::SessionDescriptionInterface* desc);
-
-    void _drain_remote_ice_candidates();
 
     class PeerConnectionObserver : public webrtc::PeerConnectionObserver {
 
@@ -247,7 +242,45 @@ private:
 
     typedef boost::shared_ptr<webrtc::IceCandidateInterface> IceCandidatePtr;
 
+    class ServiceClient {
+
+    public:
+
+        ServiceClient(Session &instance, const std::map<std::string, std::string>& names);
+
+        void shutdown();
+
+        ros::ServiceClient connect_session;
+
+        ros::ServiceClient end_session;
+
+        ros::ServiceClient add_session_ice_candidate;
+
+        ros::ServiceClient set_session_description;
+
+    private:
+
+        Session &_instance;
+
+    };
+
+    bool _open_peer_connection(
+        webrtc::PeerConnectionFactoryInterface* pc_factory,
+        const webrtc::MediaConstraintsInterface* pc_constraints,
+        const webrtc::PeerConnectionInterface::IceServers& ice_servers
+    );
+
+    void _close_peer_connection();
+
+    void _on_local_description(webrtc::SessionDescriptionInterface* desc);
+
+    void _drain_remote_ice_candidates();
+
     ros::NodeHandle _nh;
+
+    ros::Subscriber _s;
+
+    std::string _id;
 
     std::string _peer_id;
 
@@ -279,19 +312,15 @@ private:
 
     std::list<IceCandidatePtr> _remote_ice_cadidates;
 
-    ros::Publisher _dc_rpub;
-
     typedef std::vector<ros_webrtc::DataChannel> DataChannelInits;
 
     typedef std::vector<DataChannel> DataChannels;
 
     DataChannels _dcs;
 
-    std::map<std::string, std::string> _service_names;
-
     typedef std::map<std::string, ros::ServiceClient> ServiceClients;
 
-    ServiceClients _service_clis;
+    ServiceClient _srv_cli;
 
     typedef std::list<AudioSinkPtr> AudioSinks;
 

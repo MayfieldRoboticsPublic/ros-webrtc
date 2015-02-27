@@ -1,12 +1,14 @@
 #ifndef ROS_WEBRTC_HOST_H_
 #define ROS_WEBRTC_HOST_H_
 
-#include <ros_webrtc/Connect.h>
-#include <ros_webrtc/Data.h>
-#include <ros_webrtc/Disconnect.h>
-#include <ros_webrtc/IceCandidate.h>
-#include <ros_webrtc/SdpOfferAnswer.h>
-#include <ros_webrtc/Sessions.h>
+#include <ros_webrtc/AddSessionIceCandidate.h>
+#include <ros_webrtc/BeginSession.h>
+#include <ros_webrtc/ConnectSession.h>
+#include <ros_webrtc/EndSession.h>
+#include <ros_webrtc/GetHost.h>
+#include <ros_webrtc/GetSession.h>
+#include <ros_webrtc/SendSessionData.h>
+#include <ros_webrtc/SetSessionDescription.h>
 #include <talk/app/webrtc/peerconnectioninterface.h>
 
 #include "media_constraints.h"
@@ -62,9 +64,12 @@ struct AudioSource {
 
 };
 
+/**
+ * \brief Helper used to create a Host.
+ */
 struct HostFactory {
 
-    Host operator()();
+    Host operator()(ros::NodeHandle &nh);
 
     std::vector<VideoSource> video_srcs;
 
@@ -76,11 +81,15 @@ struct HostFactory {
 
 };
 
+/**
+ * \brief Accesses local media and manages peer streaming sessions.
+ */
 class Host {
 
 public:
 
     Host(
+        ros::NodeHandle &nh,
         const std::vector<VideoSource>& video_srcs,
         const AudioSource& audio_src,
         const MediaConstraints& session_constraints,
@@ -100,73 +109,75 @@ public:
     void close();
 
     SessionPtr begin_session(
+        const std::string& id,
         const std::string& peer_id,
         const MediaConstraints& sdp_constraints,
         const std::vector<ros_webrtc::DataChannel>& data_channels,
         const std::map<std::string, std::string>& service_names
     );
 
-    bool end_session(const std::string& peer_id);
+    bool end_session(
+        const std::string& id,
+        const std::string& peer_id
+    );
 
-    typedef std::list<SessionPtr> Sessions;
-
-    typedef std::list<SessionConstPtr> SessionsConst;
-
-    SessionPtr session(const std::string& peer_id);
-
-    SessionConstPtr session(const std::string& peer_id) const;
-
-    Sessions& sessions();
-
-    const Sessions& sessions() const;
-
-    struct Flush {
+    struct FlushStats {
 
         size_t reaped_data_messages;
 
-        Flush& operator += (const Session::Flush & rhs);
+        FlushStats& operator += (const Session::FlushStats & rhs);
 
     };
 
-    Flush flush();
+    FlushStats flush();
 
 private:
 
-    bool _create_pc_factory();
+    class Service {
 
-    bool _open_local_stream();
+    public:
 
-    void _close_local_stream();
+        Service(Host& instance);
 
-    bool _open_servers();
+        void advertise();
 
-    void _close_servers();
+        void shutdown();
 
-    bool _serve_connect(ros::ServiceEvent<ros_webrtc::Connect::Request, ros_webrtc::Connect::Response>& event);
+        bool begin_session(ros::ServiceEvent<ros_webrtc::BeginSession::Request, ros_webrtc::BeginSession::Response>& event);
 
-    bool _serve_disconnect(ros::ServiceEvent<ros_webrtc::Disconnect::Request, ros_webrtc::Disconnect::Response>& event);
+        bool end_session(ros::ServiceEvent<ros_webrtc::EndSession::Request, ros_webrtc::EndSession::Response>& event);
 
-    bool _serve_ice_candidate(ros::ServiceEvent<ros_webrtc::IceCandidate::Request, ros_webrtc::IceCandidate::Response>& event);
+        bool connect_session(ros::ServiceEvent<ros_webrtc::ConnectSession::Request, ros_webrtc::ConnectSession::Response>& event);
 
-    bool _serve_sdp_offer_answer(ros::ServiceEvent<ros_webrtc::SdpOfferAnswer::Request, ros_webrtc::SdpOfferAnswer::Response>& event);
+        bool add_session_ice_candidate(ros::ServiceEvent<ros_webrtc::AddSessionIceCandidate::Request, ros_webrtc::AddSessionIceCandidate::Response>& event);
 
-    bool _serve_sessions(ros::ServiceEvent<ros_webrtc::Sessions::Request, ros_webrtc::Sessions::Response>& event);
+        bool set_session_description(ros::ServiceEvent<ros_webrtc::SetSessionDescription::Request, ros_webrtc::SetSessionDescription::Response>& event);
 
-    void _handle_send(const ros_webrtc::DataConstPtr& msg);
+        bool get_session(ros::ServiceEvent<ros_webrtc::GetSession::Request, ros_webrtc::GetSession::Response>& event);
+
+        bool get_host(ros::ServiceEvent<ros_webrtc::GetHost::Request, ros_webrtc::GetHost::Response>& event);
+
+    private:
+
+        Host &_instance;
+
+        ros::V_ServiceServer _srvs;
+
+    };
 
     class SessionObserver : public Session::Observer {
 
     public:
 
-        SessionObserver(Host& instance_, SessionPtr session_);
+        SessionObserver(Host& instance, SessionPtr session);
 
         ~SessionObserver();
 
     private:
 
-        Host& instance;
+        Host& _instance;
 
-        SessionPtr session;
+        SessionPtr _session;
 
     // Session::Observer
 
@@ -175,6 +186,32 @@ private:
         void on_connection_change(webrtc::PeerConnectionInterface::IceConnectionState state);
 
     };
+
+    struct SessionKey {
+
+        bool operator < (const SessionKey& other) const {
+            if (id != other.id)
+                return id < other.id;
+            return peer_id < other.peer_id;
+        }
+
+        std::string id;
+
+        std::string peer_id;
+
+    };
+
+    typedef std::map<SessionKey, SessionPtr> Sessions;
+
+    bool _create_pc_factory();
+
+    bool _open_local_stream();
+
+    void _close_local_stream();
+
+    SessionPtr _find_session(const SessionKey& key);
+
+    SessionConstPtr _find_session(const SessionKey& key) const;
 
     ros::NodeHandle _nh;
 
@@ -200,16 +237,14 @@ private:
 
     std::list<VideoRendererPtr> _video_renderers;
 
-    ros::V_ServiceServer _rsrvs;
-
     ros::V_Subscriber _rsubs;
 
     Sessions _sessions;
 
-    ros::Publisher _dc_rpub;
+    Service _srv;
 
 };
 
 typedef boost::shared_ptr<Host> HostPtr;
 
-#endif  /* WEBRTC_DEVICE_H_ */
+#endif  /* WEBRTC_HOST_H_ */

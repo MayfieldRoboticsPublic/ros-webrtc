@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+import json
+import functools
+import wsgiref.simple_server
+
+import rospy
+from ws4py.server.wsgirefserver import WSGIServer, WebSocketWSGIRequestHandler
+from ws4py.server.wsgiutils import WebSocketWSGIApplication
+from ws4py.websocket import WebSocket
+
+
+class Channels(dict):
+    
+    pass
+
+
+class ChannelWebSocket(WebSocket):
+    
+    ID_WSGI_HEADER = 'HTTP_X_CHANNEL'
+    
+    def __init__(self, *args, **kwargs):
+        self.channels = kwargs.pop('channels')
+        super(ChannelWebSocket, self).__init__(*args, **kwargs)
+    
+    @property
+    def id(self):
+        return self.environ[self.ID_WSGI_HEADER]
+    
+    # WebSocket
+    
+    def opened(self):
+        rospy.loginfo('channel "%s" opened', self.id)
+        self.channels[self.id] = self
+        return super(ChannelWebSocket, self).opened()
+    
+    def received_message(self, message):
+        data = str(message)
+        payload = json.loads(data)
+        channel_id = payload['channel']
+        rospy.loginfo('channel "%s" -> "%s" -\n%s', self.id, channel_id, data)
+        channel = self.channels.get(channel_id)
+        if channel is None:
+            rospy.logwarn('channel "%s" not opened', channel_id)
+            return
+        payload['channel'] = self.id
+        channel.send(json.dumps(payload, indent=4))
+    
+    def closed(self, code, reason=None):
+        rospy.loginfo('channel "%s" closed', self.id)
+        self.channels.pop(self.id)
+        return super(ChannelWebSocket, self).closed(code, reason=reason)
+
+
+def main():
+    rospy.init_node('signaling', disable_signals=True)
+    
+    channels = Channels()
+    
+    server = wsgiref.simple_server.make_server(
+        host=rospy.get_param('~host', '127.0.0.1'),
+        port=rospy.get_param('~port', 9000),
+        server_class=WSGIServer,
+        handler_class=WebSocketWSGIRequestHandler,
+        app=WebSocketWSGIApplication(
+            handler_cls=functools.partial(ChannelWebSocket, channels=channels)
+        )
+    )
+    server.initialize_websockets_manager()
+
+    rospy.loginfo("serving %s:%d ...", *server.server_address)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        rospy.core.signal_shutdown('keyboard interrupt')
+    finally:
+        server.server_close()
+
+
+if __name__ == '__main__':
+    main()

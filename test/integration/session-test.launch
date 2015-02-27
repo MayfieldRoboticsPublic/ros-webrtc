@@ -1,0 +1,33 @@
+<launch>
+    <node name="play" pkg="rosbag" type="play" args="--bags /tmp/ros_webrtc/sim_2015-02-23-15-14-55.bag -l" />
+    
+    <node name="host" pkg="ros_webrtc" type="host">
+        <rosparam file="$(find ros_webrtc)/test/params/cameras.yaml" ns="cameras" />
+        <rosparam file="$(find ros_webrtc)/test/params/session.yaml" ns="session" />
+        <rosparam file="$(find ros_webrtc)/test/params/ice_servers.yaml" ns="ice_servers" />
+        <param name="flush_frequency"  value="60.0" type="double" />
+    </node>
+    
+    <node name="signaling" pkg="ros_webrtc" type="signaling">
+        <param name="host" value="127.0.0.1" type="str" />
+        <param name="port" value="9002" type="int" />
+    </node>
+    
+    <node name="peer1" pkg="ros_webrtc" type="peer">
+        <param name="host" value="host" type="str" />
+        <param name="id" value="75c29573ca834d3f9acff306664e833b" type="str" />
+        <param name="signaling_url" value="ws://127.0.0.1:9002/" type="str" />
+    </node>
+    
+    <node name="peer2" pkg="ros_webrtc" type="peer">
+        <param name="host" value="host" type="str" />
+        <param name="id" value="93e5ce1fa808418d9ffa7e36788c73e5" type="str" />
+        <param name="signaling_url" value="ws://127.0.0.1:9002/" type="str" />
+    </node>
+    
+    <test test-name="session_test" pkg="ros_webrtc" type="session_test.py">
+        <param name="signaling_url" value="ws://127.0.0.1:9002/" type="str" />
+        <param name="peer1_id" value="75c29573ca834d3f9acff306664e833b" type="str" />
+        <param name="peer2_id" value="93e5ce1fa808418d9ffa7e36788c73e5" type="str" />
+    </test>
+</launch>

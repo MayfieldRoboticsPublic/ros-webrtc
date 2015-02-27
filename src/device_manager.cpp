@@ -16,19 +16,31 @@ class ROSWebRtcVcmFactory : public cricket::WebRtcVcmFactoryInterface {
 
 public:
 
-    virtual ~ROSWebRtcVcmFactory() {
-    }
+    ROSWebRtcVcmFactory(ROSVideoCaptureTopicInfoConstPtr topics) : _topics(topics) {}
+
+    virtual ~ROSWebRtcVcmFactory() {}
+
+private:
+
+    ROSVideoCaptureTopicInfoConstPtr _topics;
 
 // cricket::WebRtcVcmFactoryInterface
 
 public:
 
-    virtual webrtc::VideoCaptureModule* Create(int id, const char* device)  {
+    virtual webrtc::VideoCaptureModule* Create(int id, const char* device) {
         return ROSVideoCaptureModule::Create(id, device);
     }
 
-    virtual webrtc::VideoCaptureModule::DeviceInfo* CreateDeviceInfo(int id)  {
-        return ROSVideoCaptureModule::CreateDeviceInfo(id);
+    virtual webrtc::VideoCaptureModule::DeviceInfo* CreateDeviceInfo(int id) {
+        std::auto_ptr<webrtc::VideoCaptureModule::DeviceInfo> devices(
+            ROSVideoCaptureModule::CreateDeviceInfo(id)
+        );
+        if (devices.get() == NULL)
+            return NULL;
+        if (!dynamic_cast<ROSVideoCaptureDeviceInfo *>(devices.get())->init(_topics))
+            return NULL;
+        return devices.release();
     }
 
     virtual void DestroyDeviceInfo(webrtc::VideoCaptureModule::DeviceInfo* info) {
@@ -41,13 +53,24 @@ public:
 
 class ROSWebRtcVideoDeviceCapturerFactory : public cricket::WebRtcVideoDeviceCapturerFactory {
 
+public:
+
+    ROSWebRtcVideoDeviceCapturerFactory(
+        ROSVideoCaptureTopicInfoConstPtr topics
+        ) : _topics(topics) {
+    }
+
+private:
+
+    ROSVideoCaptureTopicInfoConstPtr _topics;
+
 // cricket::WebRtcVideoDeviceCapturerFactory
 
 public:
 
     virtual cricket::VideoCapturer* Create(const cricket::Device& device) {
         rtc::scoped_ptr<cricket::WebRtcVideoCapturer> capturer(
-            new cricket::WebRtcVideoCapturer(new ROSWebRtcVcmFactory())
+            new cricket::WebRtcVideoCapturer(new ROSWebRtcVcmFactory(_topics))
         );
         if (!capturer->Init(device)) {
             return NULL;
@@ -59,8 +82,12 @@ public:
 
 // ROSDeviceManager
 
-ROSDeviceManager::ROSDeviceManager() {
-    SetVideoDeviceCapturerFactory(new ROSWebRtcVideoDeviceCapturerFactory());
+ROSDeviceManager::ROSDeviceManager(
+    ROSVideoCaptureTopicInfoConstPtr video_capture_topics
+    ) : _video_capture_topics(video_capture_topics) {
+    SetVideoDeviceCapturerFactory(
+        new ROSWebRtcVideoDeviceCapturerFactory(video_capture_topics)
+    );
     set_watcher(new cricket::DeviceWatcher(this));
 }
 
@@ -69,18 +96,12 @@ ROSDeviceManager::~ROSDeviceManager() {
 
 bool ROSDeviceManager::GetVideoCaptureDevices(std::vector<cricket::Device>* devs) {
     devs->clear();
-    ros::master::V_TopicInfo topics;
-    if (!ros::master::getTopics(topics)) {
-        ROS_WARN_STREAM("failed to get topics");
-        return false;
-    }
-    for (size_t i = 0; i < topics.size(); i++) {
-        const ros::master::TopicInfo& topic = topics[i];
-        if (topic.datatype == "sensor_msgs/Image") {
-            devs->push_back(cricket::Device(
-                topics[i].name, topics[i].name
-            ));
-        }
+    for (size_t i = 0; i < _video_capture_topics->size(); i++) {
+        ROS_INFO(
+            "ROS video capture device '%s'",
+            _video_capture_topics->get(i).name.c_str()
+        );
+        devs->push_back(cricket::Device(_video_capture_topics->get(i).name, i));
     }
     return true;
 }

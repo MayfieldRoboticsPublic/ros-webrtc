@@ -1,3 +1,4 @@
+string session_id
 string peer_id
 string sdp_mid
 int32 sdp_mline_index
