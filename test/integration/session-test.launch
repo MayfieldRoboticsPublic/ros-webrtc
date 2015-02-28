@@ -25,7 +25,7 @@
         <param name="signaling_url" value="ws://127.0.0.1:9002/" type="str" />
     </node>
     
-    <test test-name="session_test" pkg="ros_webrtc" type="session_test.py">
+    <test test-name="session_test" pkg="ros_webrtc" type="session_test.py" time-limit="120.0">
         <param name="signaling_url" value="ws://127.0.0.1:9002/" type="str" />
         <param name="peer1_id" value="75c29573ca834d3f9acff306664e833b" type="str" />
         <param name="peer2_id" value="93e5ce1fa808418d9ffa7e36788c73e5" type="str" />

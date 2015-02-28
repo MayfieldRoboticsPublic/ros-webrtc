@@ -142,6 +142,7 @@ class SignalSubscriber(object):
                     reliable=False,
                     ordered=False,
                     protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    broadcast=False,
                 ),
                 ros_webrtc.msg.DataChannel(
                     label='ruoc',
@@ -149,6 +150,7 @@ class SignalSubscriber(object):
                     reliable=True,
                     ordered=False,
                     protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    broadcast=False,
                 ),
                 ros_webrtc.msg.DataChannel(
                     label='roc',
@@ -156,6 +158,7 @@ class SignalSubscriber(object):
                     reliable=True,
                     ordered=True,
                     protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    broadcast=False,
                 ),
                 ros_webrtc.msg.DataChannel(
                     label='uruouc',
@@ -163,6 +166,23 @@ class SignalSubscriber(object):
                     reliable=False,
                     ordered=False,
                     protocol='application/vnd.mayfield-msg-v1+json',
+                    broadcast=False,
+                ),
+                ros_webrtc.msg.DataChannel(
+                    label='buruoc',
+                    id=-1,
+                    reliable=False,
+                    ordered=False,
+                    protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    broadcast=True,
+                ),
+                ros_webrtc.msg.DataChannel(
+                    label='broc',
+                    id=-1,
+                    reliable=True,
+                    ordered=True,
+                    protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    broadcast=True,
                 ),
             ],
             end_session=rospy.names.resolve_name('~end_session'),

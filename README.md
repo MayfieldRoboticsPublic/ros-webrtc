@@ -19,12 +19,12 @@ $ cmake -G"Eclipse CDT4 - Unix Makefiles" -D CMAKE_BUILD_TYPE=Debug ../ros-webrt
 
 ## deps
 
-Dependencies **not** available from ROS:
+Dependencies **not** available through ROS:
 
-- [libjingle-dev]()
-- [ws4py]()
+- [libjingle-dev](https://github.com/mayfieldrobotics/webrtc-build)
+- [ws4py](https://github.com/Lawouach/WebSocket-for-Python)
 
-need to be installed:
+need to be installed manually:
 
 ```bash
 $ sudo pip install ws4py
@@ -107,6 +107,6 @@ and if you want coverage:
 $ catkin_make -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=ON
 $ catkin_make run_tests
 $ lcov --path . --directory . --capture --output-file coverage.info
-$ lcov --remove coverage.info 'tests/*' '/usr/*' '/opt/*' --output-file coverage.info
+$ lcov --remove coverage.info 'devel/*' 'test/*' '/usr/*' '/opt/*' --output-file coverage.info
 $ lcov --list coverage.info
 ```

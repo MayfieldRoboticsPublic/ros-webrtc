@@ -76,22 +76,12 @@ bool Session::create_offer() {
             return false;
         }
 
-        std::string send_topic = topic_for({
-            "session_" + _id,
-            "peer_" + _peer_id,
-            "data_" + (*i).conf.label,
-            "send"
-        });
+        std::string send_topic = (*i).send_topic(*this);
         (*i).subscriber = _nh.subscribe<ros_webrtc::Data>(
             send_topic, 1, &DataChannel::send, &(*i)
         );
 
-        std::string recv_topic = topic_for({
-            "session_" + _id,
-            "peer_" + _peer_id,
-            "data_" + (*i).conf.label,
-            "recv"
-        });
+        std::string recv_topic = (*i).recv_topic(*this);
         boost::shared_ptr<DataObserver> data_observer;
         if ((*i).is_chunked() == 0) {
             data_observer.reset(new UnchunkedDataObserver(
@@ -254,6 +244,42 @@ bool Session::DataChannel::is_chunked() const {
 size_t Session::DataChannel::chunk_size() const {
     auto i = protocol.params.find("chunksize");
     return i == protocol.params.end() ? 0 : std::atoi((*i).second.c_str());
+}
+
+std::string Session::DataChannel::send_topic(const Session& session) const {
+    std::string topic;
+    if (conf.broadcast) {
+        topic = topic_for({
+            "data_" + conf.label,
+            "send"
+        });
+    } else {
+        topic = topic_for({
+            "session_" + session.id(),
+            "peer_" + session.peer_id(),
+            "data_" + conf.label,
+            "send"
+        });
+    }
+    return topic;
+}
+
+std::string Session::DataChannel::recv_topic(const Session& session) const {
+    std::string topic;
+    if (conf.broadcast) {
+        topic = topic_for({
+            "data_" + conf.label,
+            "recv"
+        });
+    } else {
+        topic = topic_for({
+            "session_" + session.id(),
+            "peer_" + session.peer_id(),
+            "data_" + conf.label,
+            "recv"
+        });
+    }
+    return topic;
 }
 
 void Session::DataChannel::send(const ros_webrtc::DataConstPtr& msg) {
@@ -421,22 +447,12 @@ void Session::PeerConnectionObserver::OnDataChannel(webrtc::DataChannelInterface
         }
         (*i).provider = data_channel;
 
-        std::string send_topic = topic_for({
-            "/session_" + instance._id,
-            "peer_" + instance._peer_id,
-            "data_" + (*i).conf.label,
-            "send"
-        });
+        std::string send_topic = (*i).send_topic(instance);
         (*i).subscriber = instance._nh.subscribe<ros_webrtc::Data>(
             send_topic, 1, &DataChannel::send, &(*i)
         );
 
-        std::string recv_topic = topic_for({
-            "/session_" + instance._id,
-            "peer_" + instance._peer_id,
-            "data_" + (*i).conf.label,
-            "recv"
-        });
+        std::string recv_topic = (*i).recv_topic(instance);
         boost::shared_ptr<DataObserver> data_observer;
         if ((*i).is_chunked()) {
             data_observer.reset(new ChunkedDataObserver(

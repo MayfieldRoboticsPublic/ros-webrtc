@@ -114,6 +114,10 @@ public:
 
         size_t chunk_size() const;
 
+        std::string send_topic(const Session& session) const;
+
+        std::string recv_topic(const Session& session) const;
+
         const ros_webrtc::DataChannel conf;
 
         MediaType protocol;
