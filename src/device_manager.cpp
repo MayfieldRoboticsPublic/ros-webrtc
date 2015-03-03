@@ -12,6 +12,9 @@
 
 // ROSWebRtcVcmFactory
 
+/**
+ * \brief Factory for exposing ROS video capture module and devices to cricket::WebRtcVideoCapturer.
+ */
 class ROSWebRtcVcmFactory : public cricket::WebRtcVcmFactoryInterface {
 
 public:
@@ -38,6 +41,7 @@ public:
         );
         if (devices.get() == NULL)
             return NULL;
+        // HACK: need to customize initialization of ROSVideoCaptureDeviceInfo
         if (!dynamic_cast<ROSVideoCaptureDeviceInfo *>(devices.get())->init(_topics))
             return NULL;
         return devices.release();
@@ -51,6 +55,9 @@ public:
 
 // ROSWebRtcVideoDeviceCapturerFactory
 
+/**
+ * \brief Factory for exposing ROS video capturers to cricket::DeviceManager.
+ */
 class ROSWebRtcVideoDeviceCapturerFactory : public cricket::WebRtcVideoDeviceCapturerFactory {
 
 public:

@@ -6,6 +6,7 @@
 
 /**
  * \brief Represents media type components (type, tree, etc).
+ * \link http://en.wikipedia.org/wiki/Internet_media_type#Naming
  */
 struct MediaType {
 

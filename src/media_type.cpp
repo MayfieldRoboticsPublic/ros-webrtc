@@ -4,6 +4,10 @@
 
 #include <boost/regex.hpp>
 
+/**
+ * A regex used to parse media types, which are used to describe data channel
+ * protocols.
+ */
 static const boost::regex media_type_re(
     "^"
     "(\\w+)"
@@ -15,6 +19,9 @@ static const boost::regex media_type_re(
     "$"
 );
 
+/**
+ * A regex used to parse media type parameters.
+ */
 static const boost::regex media_type_param_re(
     "([\\w\\-_\\.]+?)"
     "="
