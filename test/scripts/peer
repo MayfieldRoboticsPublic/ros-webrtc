@@ -141,7 +141,7 @@ class SignalSubscriber(object):
                     id=-1,
                     reliable=False,
                     ordered=False,
-                    protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
                     broadcast=False,
                 ),
                 ros_webrtc.msg.DataChannel(
@@ -149,7 +149,7 @@ class SignalSubscriber(object):
                     id=-1,
                     reliable=True,
                     ordered=False,
-                    protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
                     broadcast=False,
                 ),
                 ros_webrtc.msg.DataChannel(
@@ -157,7 +157,7 @@ class SignalSubscriber(object):
                     id=-1,
                     reliable=True,
                     ordered=True,
-                    protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
                     broadcast=False,
                 ),
                 ros_webrtc.msg.DataChannel(
@@ -165,7 +165,7 @@ class SignalSubscriber(object):
                     id=-1,
                     reliable=False,
                     ordered=False,
-                    protocol='application/vnd.mayfield-msg-v1+json',
+                    protocol='application/vnd.mayfield.msg.v1+json',
                     broadcast=False,
                 ),
                 ros_webrtc.msg.DataChannel(
@@ -173,7 +173,7 @@ class SignalSubscriber(object):
                     id=-1,
                     reliable=False,
                     ordered=False,
-                    protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
                     broadcast=True,
                 ),
                 ros_webrtc.msg.DataChannel(
@@ -181,7 +181,7 @@ class SignalSubscriber(object):
                     id=-1,
                     reliable=True,
                     ordered=True,
-                    protocol='application/vnd.mayfield-msg-chunk-v1+json; chunksize=32',
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
                     broadcast=True,
                 ),
             ],

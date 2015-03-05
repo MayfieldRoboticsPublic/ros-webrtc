@@ -121,7 +121,12 @@ SessionPtr Host::begin_session(
     const std::vector<ros_webrtc::DataChannel>& data_channels,
     const std::map<std::string, std::string>& service_names
     ) {
-    ROS_INFO("creating session '%s'", id.c_str());
+    ROS_INFO("creating session id='%s', peer='%s'", id.c_str(), peer_id.c_str());
+    SessionKey key = {id, peer_id};
+    if (_sessions.find(key) != _sessions.end()) {
+        ROS_ERROR("session w/ session id='%s', peer='%s' already exists", id.c_str(), peer_id.c_str());
+        return NULL;
+    }
     SessionPtr s(new Session(
         id,
         peer_id,
@@ -138,7 +143,6 @@ SessionPtr Host::begin_session(
         pc_observer
         ))
         return SessionPtr();
-    SessionKey key = {s->id(), s->peer_id()};
     _sessions[key] = s;
     return s;
 }
@@ -393,7 +397,7 @@ bool Host::Service::begin_session(ros::ServiceEvent<ros_webrtc::BeginSession::Re
     SessionPtr session(_instance.begin_session(
         req.session_id, req.peer_id, sdp_constraints, req.data_channels, service_names
     ));
-    return true;
+    return session != NULL;
 }
 
 bool Host::Service::end_session(ros::ServiceEvent<ros_webrtc::EndSession::Request, ros_webrtc::EndSession::Response>& event) {
@@ -527,6 +531,19 @@ bool Host::Service::get_host(ros::ServiceEvent<ros_webrtc::GetHost::Request, ros
     return true;
 }
 
+// Host::EndSessionCallback
+
+Host::EndSessionCallback::EndSessionCallback(Host& instance, const SessionKey& key) :
+    _instance(instance),
+    _key(key) {
+}
+
+ros::CallbackInterface::CallResult Host::EndSessionCallback::call() {
+    _instance.end_session(_key.id, _key.peer_id);
+    return Success;
+}
+
+
 // Host::SessionObserver
 
 Host::SessionObserver::SessionObserver(Host& instance, SessionPtr session) :
@@ -539,6 +556,8 @@ Host::SessionObserver::~SessionObserver() {
 
 void Host::SessionObserver::on_connection_change(webrtc::PeerConnectionInterface::IceConnectionState state) {
     if (state == webrtc::PeerConnectionInterface::kIceConnectionDisconnected) {
-        _instance.end_session(_session->id(), _session->peer_id());
+        SessionKey key = {_session->id(), _session->peer_id()};
+        ros::CallbackInterfacePtr callback(new Host::EndSessionCallback(_instance, key));
+        _instance._nh.getCallbackQueue()->addCallback(callback);
     }
 }

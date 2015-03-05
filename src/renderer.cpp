@@ -107,7 +107,7 @@ DataObserver::DataObserver(
 }
 
 DataObserver::~DataObserver() {
-    ROS_INFO("registering data renderer for '%s'", _dc->label().c_str());
+    ROS_INFO("unregistering data renderer for '%s'", _dc->label().c_str());
     _dc->UnregisterObserver();
 }
 

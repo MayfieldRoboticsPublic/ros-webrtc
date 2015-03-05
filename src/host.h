@@ -1,6 +1,7 @@
 #ifndef ROS_WEBRTC_HOST_H_
 #define ROS_WEBRTC_HOST_H_
 
+#include <ros/callback_queue_interface.h>
 #include <ros_webrtc/AddSessionIceCandidate.h>
 #include <ros_webrtc/BeginSession.h>
 #include <ros_webrtc/ConnectSession.h>
@@ -175,6 +176,8 @@ private:
 
     private:
 
+        void _async_end_session(const ros::TimerEvent& event);
+
         Host& _instance;
 
         SessionPtr _session;
@@ -198,6 +201,26 @@ private:
         std::string id;
 
         std::string peer_id;
+
+    };
+
+    class EndSessionCallback : public ros::CallbackInterface {
+
+    public:
+
+        EndSessionCallback(Host& instance, const SessionKey& key);
+
+    private:
+
+        Host& _instance;
+
+        SessionKey _key;
+
+    // ros::CallbackInterface
+
+    public:
+
+        virtual ros::CallbackInterface::CallResult call();
 
     };
 

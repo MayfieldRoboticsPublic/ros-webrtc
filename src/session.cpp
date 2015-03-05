@@ -56,8 +56,8 @@ bool Session::begin(
 }
 
 void Session::end() {
-    _observer.reset();
     _close_peer_connection();
+    _observer.reset();
     _srv_cli.shutdown();
 }
 
@@ -65,6 +65,7 @@ bool Session::create_offer() {
     for (DataChannels::iterator i = _dcs.begin(); i != _dcs.end(); i++) {
         webrtc::DataChannelInit init;
         init.id = (*i).conf.id;
+        init.protocol = (*i).conf.protocol;
         init.ordered = (*i).conf.ordered;
         init.reliable = (*i).conf.reliable;
         (*i).provider = _pc->CreateDataChannel((*i).conf.label, &init);
@@ -83,12 +84,12 @@ bool Session::create_offer() {
 
         std::string recv_topic = (*i).recv_topic(*this);
         boost::shared_ptr<DataObserver> data_observer;
-        if ((*i).is_chunked() == 0) {
-            data_observer.reset(new UnchunkedDataObserver(
+        if ((*i).is_chunked()) {
+            data_observer.reset(new ChunkedDataObserver(
                 _nh, recv_topic, (*i).provider.get()
             ));
         } else {
-            data_observer.reset(new ChunkedDataObserver(
+            data_observer.reset(new UnchunkedDataObserver(
                 _nh, recv_topic, (*i).provider.get()
             ));
         }
@@ -238,7 +239,7 @@ Session::DataChannel::DataChannel(const ros_webrtc::DataChannel& conf) :
 }
 
 bool Session::DataChannel::is_chunked() const {
-    return protocol.sub_type == "mayfield-msg-chunk-v1";
+    return protocol.sub_type == "mayfield.msg.v1" && chunk_size() != 0;
 }
 
 size_t Session::DataChannel::chunk_size() const {
