@@ -61,6 +61,10 @@ void Session::end() {
     _srv_cli.shutdown();
 }
 
+webrtc::PeerConnectionInterface* Session::peer_connection() {
+    return _pc.get();
+}
+
 bool Session::create_offer() {
     for (DataChannels::iterator i = _dcs.begin(); i != _dcs.end(); i++) {
         webrtc::DataChannelInit init;

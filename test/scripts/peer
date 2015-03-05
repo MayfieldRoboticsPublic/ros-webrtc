@@ -125,8 +125,8 @@ class SignalSubscriber(object):
             rospy.logerr(ex)
             
     def _start(self, signaling, channel, session, payload):
-        self._begin_session(signaling, payload['peer'], session, payload)
-        signaling.publish(payload['peer'], session, 'connect_session', payload)
+        self._begin_session(signaling, channel, session, payload)
+        signaling.publish(channel, session, 'connect_session', payload)
     
     def _begin_session(self, signaling, channel, session, payload):
         self.srvs['begin_session'](

@@ -90,6 +90,8 @@ public:
      */
     void end();
 
+    webrtc::PeerConnectionInterface* peer_connection();
+
     bool create_offer();
 
     bool is_offerer() const;

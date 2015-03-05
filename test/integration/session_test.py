@@ -15,7 +15,6 @@ from ws4py.client.threadedclient import WebSocketClient
 
 import ros_webrtc.msg
 import ros_webrtc.srv
-from pprint import pprint
 
 
 PKG = 'ros_webrtc'
@@ -27,20 +26,23 @@ class TestSession(unittest.TestCase):
     def setUp(self):
         super(TestSession, self).setUp()
         self.srv_timeout = 2.0
-        self.signal_timeout = 2.0
+        self.sig_timeout = 2.0
         self.peer1_id = rospy.get_param('~peer1_id')
         self.peer2_id = rospy.get_param('~peer2_id')
         self.session = uuid.uuid4().hex
         signaling_url = rospy.get_param('~signaling_url')
         rospy.loginfo('connecting to signaling @ "%s"', signaling_url)
-        self.signaling = Signaling(signaling_url)
-        self.signaling.connect()
-        self.addCleanup(self.signaling.close)
+        self.sig = Signaling(signaling_url)
+        self.sig.connect()
+        self.addCleanup(self.sig.close)
 
-    @unittest.skip('')
+    def tearDown(self):
+        self.sig.publish(self.peer1_id, self.session, 'end_session', callback=self.peer2_id)
+        super(TestSession, self).tearDown()
+
     def test_setup(self):
-        self.signaling.publish(self.peer1_id, self.session, 'start', {'peer': self.peer2_id})
-        time.sleep(self.signal_timeout)
+        self.sig.publish(self.peer1_id, self.session, 'start', callback=self.peer2_id)
+        time.sleep(self.sig_timeout)
  
         srv = rospy.ServiceProxy('/host/get_host', ros_webrtc.srv.GetHost)
         srv.wait_for_service(timeout=self.srv_timeout)
@@ -54,8 +56,8 @@ class TestSession(unittest.TestCase):
         )
 
     def test_video(self):
-        self.signaling.publish(self.peer1_id, self.session, 'start', {'peer': self.peer2_id})
-        time.sleep(self.signal_timeout)
+        self.sig.publish(self.peer1_id, self.session, 'start', callback=self.peer2_id)
+        time.sleep(self.sig_timeout)
         
         frames = collections.Counter()
         
@@ -88,13 +90,12 @@ class TestSession(unittest.TestCase):
         while not stop_flag.is_set():
             rospy.rostime.wallsleep(0.5)
         
-        pprint(frames)
         for topic in frames.iterkeys():
             self.assertTrue(5 <= frames[topic])
 
     def test_p2p_data(self):
-        self.signaling.publish(self.peer1_id, self.session, 'start', {'peer': self.peer2_id})
-        time.sleep(self.signal_timeout)
+        self.sig.publish(self.peer1_id, self.session, 'start', callback=self.peer2_id)
+        time.sleep(self.sig_timeout)
         
         sent = collections.Counter()
         
@@ -173,8 +174,8 @@ class TestSession(unittest.TestCase):
             self.assertEqual(sent[send_topic], recvd[recv_topic])
 
     def test_broadcast_data(self):
-        self.signaling.publish(self.peer1_id, self.session, 'start', {'peer': self.peer2_id})
-        time.sleep(self.signal_timeout)
+        self.sig.publish(self.peer1_id, self.session, 'start', callback=self.peer2_id)
+        time.sleep(self.sig_timeout)
         
         sent = collections.Counter()
         
@@ -244,6 +245,38 @@ class TestSession(unittest.TestCase):
             send_topic = topic_fmt.format(data=label) + '/send'
             recv_topic = topic_fmt.format(data=label) + '/recv'
             self.assertEqual(sent[send_topic] * len(sinks), recvd[recv_topic])
+    
+    def test_reconnect(self):
+        self.sig.publish(self.peer1_id, self.session, 'start', callback=self.peer2_id)
+        time.sleep(self.sig_timeout)
+        
+        get_host = rospy.ServiceProxy('/host/get_host', ros_webrtc.srv.GetHost)
+        get_host.wait_for_service(timeout=self.srv_timeout)
+        
+        resp = get_host()
+        self.assertEqual(len(resp.sessions), 2)
+        self.assertItemsEqual(
+            [s.id for s in resp.sessions], [self.session] * 2
+        )
+        self.assertItemsEqual(
+            [s.peer_id for s in resp.sessions], [self.peer1_id, self.peer2_id]
+        )
+        
+        self.sig.publish(self.peer1_id, self.session, 'end_session', callback=self.peer2_id)
+        session = uuid.uuid4().hex
+        self.sig.publish(self.peer1_id, session, 'start', callback=self.peer2_id)
+        time.sleep(self.sig_timeout)
+        
+        resp = get_host()
+        self.assertEqual(len(resp.sessions), 2)
+        self.assertItemsEqual(
+            [s.id for s in resp.sessions], [session] * 2
+        )
+        self.assertItemsEqual(
+            [s.peer_id for s in resp.sessions], [self.peer1_id, self.peer2_id]
+        )
+        
+        self.sig.publish(self.peer2_id, session, 'end_session', callback=self.peer1_id)
 
 
 class Signaling(WebSocketClient):

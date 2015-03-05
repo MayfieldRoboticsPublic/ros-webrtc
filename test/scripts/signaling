@@ -30,7 +30,10 @@ class ChannelWebSocket(WebSocket):
     
     def opened(self):
         rospy.loginfo('channel "%s" opened', self.id)
-        self.channels[self.id] = self
+        if self.id in self.channels:
+            rospy.logerr('channel "%s" already opened', self.id)
+        else:
+            self.channels[self.id] = self
         return super(ChannelWebSocket, self).opened()
     
     def received_message(self, message):
@@ -42,12 +45,19 @@ class ChannelWebSocket(WebSocket):
         if channel is None:
             rospy.logwarn('channel "%s" not opened', channel_id)
             return
-        payload['channel'] = self.id
+        callback = payload.pop('callback', None)
+        if callback is not None:
+            payload['channel'] = callback
+        else:
+            payload['channel'] = self.id
         channel.send(json.dumps(payload, indent=4))
     
     def closed(self, code, reason=None):
         rospy.loginfo('channel "%s" closed', self.id)
-        self.channels.pop(self.id)
+        if self.id in self.channels:
+            self.channels.pop(self.id)
+        else:
+            rospy.logwarn('channel "%s" was not opened', self.id)
         return super(ChannelWebSocket, self).closed(code, reason=reason)
 
 

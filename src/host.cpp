@@ -124,7 +124,7 @@ SessionPtr Host::begin_session(
     ROS_INFO("creating session id='%s', peer='%s'", id.c_str(), peer_id.c_str());
     SessionKey key = {id, peer_id};
     if (_sessions.find(key) != _sessions.end()) {
-        ROS_ERROR("session w/ session id='%s', peer='%s' already exists", id.c_str(), peer_id.c_str());
+        ROS_ERROR("session w/ id='%s', peer='%s' already exists", id.c_str(), peer_id.c_str());
         return NULL;
     }
     SessionPtr s(new Session(
@@ -151,7 +151,7 @@ bool Host::end_session(const std::string& id, const std::string& peer_id) {
     SessionKey key = {id, peer_id};
     auto i = _sessions.find(key);
     if (i == _sessions.end()) {
-        ROS_INFO_STREAM("no session " << id << " w/ peer " << peer_id);
+        ROS_INFO("no session w/ id='%s' peer='%s'", id.c_str(), peer_id.c_str());
         return false;
     }
     (*i).second->end();
@@ -450,6 +450,30 @@ bool Host::Service::get_session(ros::ServiceEvent<ros_webrtc::GetSession::Reques
     SessionPtr session = _instance._find_session(key);
     if (session == NULL)
         return false;
+    auto &resp = event.getResponse();
+    webrtc::scoped_refptr<webrtc::PeerConnectionInterface> pc(session->peer_connection());
+    if (pc.get() != NULL) {
+        switch (session->peer_connection()->signaling_state()) {
+            case webrtc::PeerConnectionInterface::SignalingState::kStable:
+                resp.signaling_state = "stable";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kHaveLocalOffer:
+                resp.signaling_state = "have_local_offer";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kHaveLocalPrAnswer:
+                resp.signaling_state = "have_local_pr_answer";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kHaveRemoteOffer:
+                resp.signaling_state = "have_remote_offer";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kHaveRemotePrAnswer:
+                resp.signaling_state = "have_remote_pr_answer";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kClosed:
+                resp.signaling_state = "closed";
+                break;
+        };
+    }
     return true;
 }
 
