@@ -10,6 +10,9 @@
 #include <webrtc/system_wrappers/interface/thread_wrapper.h>
 
 
+/**
+ * \brief Represents a ROS topics as a WebRTC video capture device.
+ */
 class ROSVideoCaptureModule : public webrtc::videocapturemodule::VideoCaptureImpl {
 
 public:
@@ -18,6 +21,12 @@ public:
 
     virtual ~ROSVideoCaptureModule();
 
+    /**
+     * \brief Subscribes to an image ROS topic.
+     *
+     * \param deviceUniqueIdUTF8 ROS topic name.
+     * \returns 0 on success, non-0 otherwise.
+     */
     int32_t init(const char* deviceUniqueIdUTF8);
 
 private:
@@ -33,8 +42,6 @@ private:
     webrtc::CriticalSectionWrapper* _capture_cs;
 
     bool _capturing;
-
-    std::string _topic;
 
     ros::Subscriber _subscriber;
 
@@ -62,7 +69,42 @@ public:
 
 };
 
+/**
+ * \brief Collection of ROS topics to adapt as WebRTC video capture devices.
+ */
+class ROSVideoCaptureTopicInfo {
 
+public:
+
+    /// Query master for all ROS topics that can be adapted.
+    static ROSVideoCaptureTopicInfo scan();
+
+    ROSVideoCaptureTopicInfo();
+
+    ROSVideoCaptureTopicInfo(const std::vector<ros::master::TopicInfo> &values);
+
+    const ros::master::TopicInfo& get(size_t i) const { return _values[i]; }
+
+    size_t size() const { return _values.size(); }
+
+    void add(const std::string& name);
+
+    int find(const std::string& name) const;
+
+private:
+
+    std::vector<ros::master::TopicInfo> _values;
+
+};
+
+typedef boost::shared_ptr<ROSVideoCaptureTopicInfo> ROSVideoCaptureTopicInfoPtr;
+
+typedef boost::shared_ptr<ROSVideoCaptureTopicInfo const> ROSVideoCaptureTopicInfoConstPtr;
+
+
+/**
+ * \brief Represents available ROS topics as video capture devices to WebRTC.
+ */
 class ROSVideoCaptureDeviceInfo : public webrtc::videocapturemodule::DeviceInfoImpl {
 
 public:
@@ -70,6 +112,8 @@ public:
     ROSVideoCaptureDeviceInfo(const int32_t id);
 
     virtual ~ROSVideoCaptureDeviceInfo();
+
+    bool init(ROSVideoCaptureTopicInfoConstPtr topics);
 
 private:
 
@@ -80,6 +124,8 @@ private:
        }
 
     };
+
+    ROSVideoCaptureTopicInfoConstPtr _topics;
 
 // webrtc::VideoCaptureModule::DeviceInfo
 
@@ -97,7 +143,7 @@ public:
         uint32_t productUniqueIdUTF8Length=0
     );
 
-    virtual int32_t CreateCapabilityMap (const char* deviceUniqueIdUTF8);
+    virtual int32_t CreateCapabilityMap(const char* deviceUniqueIdUTF8);
 
     virtual int32_t DisplayCaptureSettingsDialogBox(
         const char* deviceUniqueIdUTF8,
@@ -111,4 +157,4 @@ public:
 
 };
 
-#endif /* VIDEO_CAPTURE_H_ */
+#endif /* ROS_WEBRTC_VIDEO_CAPTURE_H_ */

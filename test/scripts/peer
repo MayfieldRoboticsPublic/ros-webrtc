@@ -1,0 +1,238 @@
+#!/usr/bin/env python
+import json
+import pprint
+import sys
+import uuid
+
+import ros_webrtc.msg
+import ros_webrtc.srv
+import rosgraph
+import rospy
+from ws4py.client.threadedclient import WebSocketClient
+
+
+class Signaling(WebSocketClient):
+    
+    def __init__(self, url, channel, handler):
+        super(Signaling, self).__init__(
+            url, headers=[('X-Channel', channel)]
+        )
+        self.handler = handler
+    
+    def publish(self, channel, session, type, payload=None):
+        message = {
+            'channel': channel,
+            'session': session,
+            'type': type,
+            'payload': payload
+        }
+        return self.send(json.dumps(message, indent=4), binary=False)
+    
+    # WebSocketClient
+    
+    def received_message(self, message):
+        deserialized = json.loads(str(message))
+        return self.handler(
+            self,
+            deserialized['channel'],
+            deserialized['session'],
+            deserialized['type'],
+            deserialized.get('payload'),
+        )
+
+
+class SignalPublisher(object):
+    
+    def __init__(self, signaling):
+        self.signaling = signaling
+        self.srvs = []
+    
+    def advertise(self):
+        self.srvs = [
+            rospy.Service(name, srv, handler)
+            for name, srv, handler in [
+                ('~add_session_ice_candidate', ros_webrtc.srv.AddSessionIceCandidate, self._add_session_ice_candidate),
+                ('~set_session_description', ros_webrtc.srv.SetSessionDescription, self._set_session_description),
+                ('~connect_session', ros_webrtc.srv.ConnectSession, self._connect_session),
+                ('~end_session', ros_webrtc.srv.EndSession, self._end_session),
+            ]
+        ]
+    
+    def _add_session_ice_candidate(self, req):
+        payload = {
+            'sdpMid': req.sdp_mid,
+            'sdpMLineIndex': req.sdp_mline_index,
+            'candidate': req.candidate,
+        }
+        self.signaling.publish(
+            req.peer_id, req.session_id, 'add_session_ice_candidate', payload,
+        )
+        resp = ros_webrtc.srv.AddSessionIceCandidateResponse()
+        return resp
+    
+    def _set_session_description(self, req):
+        payload = {
+            'type': req.type,
+            'sdp': req.sdp,
+        }
+        self.signaling.publish(
+            req.peer_id, req.session_id, 'set_session_description', payload,
+        )
+        resp = ros_webrtc.srv.SetSessionDescriptionResponse()
+        return resp
+    
+    def _connect_session(self, req):
+        self.signaling.publish(req.peer_id, req.session_id, 'connect_session')
+        resp = ros_webrtc.srv.ConnectSessionResponse()
+        return resp
+    
+    def _end_session(self, req):
+        self.signaling.publish(req.peer_id, req.session_id, 'end_session')
+        resp = ros_webrtc.srv.EndSessionResponse()
+        return resp
+
+
+class SignalSubscriber(object):
+    
+    def __init__(self): 
+        self.srvs = dict(
+            (name, rospy.ServiceProxy(rosgraph.names.ns_join(rospy.get_param('~host'), name), srv))
+            for name, srv in [
+                ('begin_session', ros_webrtc.srv.BeginSession),
+                ('connect_session', ros_webrtc.srv.ConnectSession),
+                ('end_session', ros_webrtc.srv.EndSession),
+                ('add_session_ice_candidate', ros_webrtc.srv.AddSessionIceCandidate),
+                ('set_session_description', ros_webrtc.srv.SetSessionDescription),
+            ]
+        )
+    
+    def __call__(self, signaling, channel, session, type, payload):
+        rospy.loginfo('received signal - "%s", "%s", "%s", %s', channel, session, type, payload)
+        try:
+            handler = {
+                'start': self._start,
+                'begin_session': self._begin_session,
+                'connect_session': self._connect_session,
+                'add_session_ice_candidate': self._add_session_ice_candidate,
+                'set_session_description': self._set_session_description,
+                'end_session': self._end_session,
+            }.get(type)
+            if handler is None:
+                rospy.logwarn('signal has unsupported type "%s"', type)
+                return
+            handler(signaling, channel, session, payload)
+        except Exception, ex:
+            rospy.logerr(ex)
+            
+    def _start(self, signaling, channel, session, payload):
+        self._begin_session(signaling, channel, session, payload)
+        signaling.publish(channel, session, 'connect_session', payload)
+    
+    def _begin_session(self, signaling, channel, session, payload):
+        self.srvs['begin_session'](
+            session_id=session,
+            peer_id=channel,
+            sdp_constraints=ros_webrtc.msg.MediaConstraints(
+                mandatory=[], optional=[],
+            ),
+            data_channels=[
+                ros_webrtc.msg.DataChannel(
+                    label='uruoc',
+                    id=-1,
+                    reliable=False,
+                    ordered=False,
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
+                    broadcast=False,
+                ),
+                ros_webrtc.msg.DataChannel(
+                    label='ruoc',
+                    id=-1,
+                    reliable=True,
+                    ordered=False,
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
+                    broadcast=False,
+                ),
+                ros_webrtc.msg.DataChannel(
+                    label='roc',
+                    id=-1,
+                    reliable=True,
+                    ordered=True,
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
+                    broadcast=False,
+                ),
+                ros_webrtc.msg.DataChannel(
+                    label='uruouc',
+                    id=-1,
+                    reliable=False,
+                    ordered=False,
+                    protocol='application/vnd.mayfield.msg.v1+json',
+                    broadcast=False,
+                ),
+                ros_webrtc.msg.DataChannel(
+                    label='buruoc',
+                    id=-1,
+                    reliable=False,
+                    ordered=False,
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
+                    broadcast=True,
+                ),
+                ros_webrtc.msg.DataChannel(
+                    label='broc',
+                    id=-1,
+                    reliable=True,
+                    ordered=True,
+                    protocol='application/vnd.mayfield.msg.v1+json; chunksize=32',
+                    broadcast=True,
+                ),
+            ],
+            end_session=rospy.names.resolve_name('~end_session'),
+            add_session_ice_candidate=rospy.names.resolve_name('~add_session_ice_candidate'),
+            set_session_description=rospy.names.resolve_name('~set_session_description'),
+        )
+    
+    def _connect_session(self, signaling, channel, session, payload):
+        self._begin_session(signaling, channel, session, payload)
+        self.srvs['connect_session'](session_id=session, peer_id=channel)
+    
+    def _end_session(self, signaling, channel, session, payload):
+        self.srvs['end_session'](session_id=session, peer_id=channel)
+    
+    def _add_session_ice_candidate(self, signaling, channel, session, payload):
+        self.srvs['add_session_ice_candidate'](
+            session_id=session,
+            peer_id=channel,
+            sdp_mid=payload['sdpMid'],
+            sdp_mline_index=payload['sdpMLineIndex'],
+            candidate=payload['candidate'],
+        )
+    
+    def _set_session_description(self, signaling, channel, session, payload):
+        self.srvs['set_session_description'](
+            session_id=session,
+            peer_id=channel,
+            type=payload['type'],
+            sdp=payload['sdp'],
+        )
+
+
+def main():
+    rospy.init_node('application')
+    
+    channel = rospy.get_param('~id', uuid.uuid4().hex)
+    rospy.loginfo('using channel "%s"', channel)
+    
+    signaling_url = rospy.get_param('~signaling_url')
+    rospy.loginfo('subscribing to signals from remote @ %s', signaling_url)
+    signaling = Signaling(signaling_url, channel, SignalSubscriber())
+    signaling.connect()
+    
+    rospy.loginfo('publishing signals to remote @ %s', signaling_url)
+    srv = SignalPublisher(signaling)
+    srv.advertise()
+    
+    rospy.loginfo('spinning ...')
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    main()

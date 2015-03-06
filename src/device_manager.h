@@ -3,13 +3,24 @@
 
 #include <talk/media/devices/devicemanager.h>
 
+#include "video_capture.h"
+
+/**
+ * \brief Represents ROS topics as media (video, audio, etc) devices.
+ */
 class ROSDeviceManager : public cricket::DeviceManager {
 
 public:
 
+    ROSDeviceManager(ROSVideoCaptureTopicInfoConstPtr video_capture_topics);
+
     ROSDeviceManager();
 
     virtual ~ROSDeviceManager();
+
+private:
+
+    ROSVideoCaptureTopicInfoConstPtr _video_capture_topics;
 
 // cricket::DeviceManager
 

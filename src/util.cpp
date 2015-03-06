@@ -23,28 +23,24 @@ std::string normalize_name(const std::string& name) {
     return normalized;
 }
 
-std::string topic_for(const std::string& group, const std::string& type) {
-    return ros::names::append(
-        "ros_webrtc", ros::names::append(normalize_name(group), normalize_name(type))
-    );
+std::string topic_for(std::initializer_list<std::string> parts) {
+    std::string path = "";
+    for(auto part : parts) {
+        path = ros::names::append(path, normalize_name(part));
+    }
+    return path;
 }
 
 std::string service_for(const std::string& name) {
-    return ros::names::append(
-        "ros_webrtc", normalize_name(name)
-    );
+    return normalize_name(name);
 }
 
 std::string topic_for(const std::string& name) {
-    return ros::names::append(
-        "ros_webrtc", normalize_name(name)
-    );
+    return normalize_name(name);
 }
 
 std::string param_for(const std::string& name) {
-    return ros::names::append(
-        "ros_webrtc", normalize_name(name)
-    );
+    return normalize_name(name);
 }
 
 std::string generate_id() {

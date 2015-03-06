@@ -1,0 +1,8 @@
+downward:
+  name: ros:///downward_looking_camera/image_raw
+  label: downward
+  publish: true
+upward:
+  name: ros:///upward_looking_camera/image_raw
+  label: upward
+  publish: true

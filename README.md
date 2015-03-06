@@ -1,6 +1,6 @@
 # ros-webrtc
 
-ROS node for managing [WebRTC](http://www.webrtc.org/):
+ROS node for exposing [WebRTC](http://www.webrtc.org/):
 
 - **audio**
 - **video**
@@ -15,6 +15,21 @@ $ git clone git@github.com:ixirobot/ros-webtc.git
 $ mkdir ros-webtc-build
 $ cd ros-webtc-build
 $ cmake -G"Eclipse CDT4 - Unix Makefiles" -D CMAKE_BUILD_TYPE=Debug ../ros-webrtc/
+```
+
+## deps
+
+Dependencies **not** available through ROS:
+
+- [libjingle-dev](https://github.com/mayfieldrobotics/webrtc-build)
+- [ws4py](https://github.com/Lawouach/WebSocket-for-Python)
+
+need to be installed manually:
+
+```bash
+$ sudo pip install ws4py
+$ cd /tmp && { curl -O "https://s3-us-west-1.amazonaws.com/ai-libjingle-dev/libjingle-dev-1b024da3debug-1_amd64.deb"; cd -; }
+$ sudo dpkg -i libjingle-dev-1b024da3debug-1_amd64.deb
 ```
 
 ## usage
@@ -36,113 +51,27 @@ then:
 
 and that's it.
 
-Here's e.g. of the **ingress** signaling ROS service linking
-[pubnub](http://www.pubnub.com/) signals to the corresponding `ros_webrtc` ROS
-service(s):
-
-```python
-import rosgraph
-import rospy
-
-import ros_webrtc
-
-
-class SignalSubscriber(object):
-    
-    def __init__(self):
-        self.srvs = dict(
-            (name, rospy.ServiceProxy(rosgraph.names.ns_join('ros_webrtc', name), srv))
-            for name, srv in [
-                ('connect', ros_webrtc.srv.Connect),
-                ('disconnect', ros_webrtc.srv.Disconnect),
-                ('ice_candidate', ros_webrtc.srv.IceCandidate),
-                ('sdp_offer_answer', ros_webrtc.srv.SdpOfferAnswer),
-            ]
-        )
-    
-    def __call__(self, message, channel):
-        try:
-            rospy.loginfo('pubnub @ %s - %s', channel, message)
-            if not isinstance(message, collections.Mapping):
-                rospy.logwarn('pubnub @ %s is not a mapping - %s', channel, message)
-                return
-            if 'type' not in message:
-                rospy.logwarn('pubnub @ %s has no "type" key - %s', channel, message)
-                return
-            if 'payload' not in message:
-                rospy.logwarn('pubnub @ %s has no "payload" key - %s', channel, message)
-                return
-            if message['type'] == 'connect':
-                handler = self._on_connect
-            elif message['type'] == 'disconnect':
-                handler = self._on_disconnect
-            elif message['type'] == 'ice_candidate':
-                handler = self._on_ice_candidate
-            elif message['type'] == 'sdp_offeranswer':
-                handler = self._on_sdp_offeranswer
-            else:
-                rospy.loginfo('pubnub @ %s has unsupported "type" - %s', channel, message)
-                return
-            handler(channel, message)
-        except Exception, ex:
-            rospy.logerr(ex)
-    
-    def _on_connect(self, channel, message):
-        self.srvs['connect'](
-            peer_id=message['device'],
-            sdp_constraints=ros_webrtc.msg.MediaConstraints(
-                mandatory=[],
-                optional=[],
-            ),
-            data_channels=[
-                ros_webrtc.msg.DataChannel(
-                    label='rosbridge',
-                    id=-1,
-                    reliable=False,
-                    ordered=False,
-                ),
-            ],
-            disconnect_service='/my_project/disconnect'),
-            ice_candidate_service='/my_project/ice_candidate'),
-            sdp_offer_answer_service='/my_project/sdp_offer_answer'),
-        )
-    
-    def _on_disconnect(self, channel, message):
-        self.srvs['disconnect'](
-            peer_id=message['device'],
-        )
-    
-    def _on_ice_candidate(self, channel, message):
-        self.srvs['ice_candidate'](
-            peer_id=message['device'],
-            sdp_mid=message['payload']['sdpMid'],
-            sdp_mline_index=message['payload']['sdpMLineIndex'],
-            candidate=message['payload']['candidate'],
-        )
-    
-    def _on_sdp_offeranswer(self, channel, message):
-        self.srvs['sdp_offer_answer'](
-            peer_id=message['device'],
-            type=message['payload']['type'],
-            sdp=message['payload']['sdp'],
-        )
-```
-
-## device
+## host
 
 This ROS node exposes all WebRTC functionality:
 
 ```bash
-$ rosrun ros_webrtc device
+$ rosrun ros_webrtc host
 ```
 
-and is configured via `rosparam`:
+and is configured via `rosparam`, e.g.:
 
 ```bash
 $ rosparam get /ros_webrtc
 cameras:
-  downward: {label: downward, name: sys://Loopback video device 0}
-  upward: {label: upward, name: sys://Loopback video device 1}
+  downward:
+    name: ros:///downward_looking_camera/image_raw
+    label: downward
+    publish: true
+  upward:
+    name: ros:///upward_looking_camera/image_raw
+    label: upward
+    publish: true
 ice_servers:
 - {uri: 'stun:stun.services.mozilla.com:3478'}
 - {uri: 'stun:stun.l.google.com:19302'}
@@ -151,12 +80,33 @@ session:
     optional: {DtlsSrtpKeyAgreement: 'true'}
 ```
 
-All other configuration is per-session and passed to `device` using
-`ros_webrtc` services:
+All other configuration is per-session and passed to `host` using `ros_webrtc`
+services:
 
-- `srv/Connect.srv`
-- `srv/Disconnect.srv`
-- `srv/IceCandidate.srv`
-- `srv/SdpOfferAnswer.srv`
+- `srv/BeginSession.srv`
+- `srv/ConnectSession.srv`
+- `srv/EndSession.srv`
+- `srv/AddSessionIceCandidate.srv`
+- `srv/SetSessionDescription.srv`
 
-when setting up a connection to a peer.
+when setting up a connection to a peer. Information about a `host` and its
+sessions are here:
+
+- `srv/GetHost.srv`
+- `srv/GetSession.srv`
+
+## tests
+
+```bash
+$ catkin_make run_tests
+```
+
+and if you want coverage:
+
+```bash
+$ catkin_make -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=ON
+$ catkin_make run_tests
+$ lcov --path . --directory . --capture --output-file coverage.info
+$ lcov --remove coverage.info 'devel/*' 'test/*' '/usr/*' '/opt/*' --output-file coverage.info
+$ lcov --list coverage.info
+```

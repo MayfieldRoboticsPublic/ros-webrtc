@@ -10,13 +10,14 @@
 // Session
 
 Session::Session(
+    const std::string& id,
     const std::string& peer_id,
     webrtc::MediaStreamInterface* local_stream,
     const MediaConstraints& sdp_constraints,
-    ros::Publisher& dc_rpub,
-    const std::vector<ros_webrtc::DataChannel>& data_channels,
+    const std::vector<ros_webrtc::DataChannel>& dcs,
     const std::map<std::string, std::string>& service_names
     ) :
+    _id(id),
     _peer_id(peer_id),
     _local_stream(local_stream),
     _sdp_constraints(sdp_constraints),
@@ -25,11 +26,14 @@ Session::Session(
     _ssdo(new Session::SetSessionDescriptionObserver(*this)),
     _is_offerer(false),
     _queue_remote_ice_candidates(true),
-    _dc_rpub(dc_rpub),
-    _service_names(service_names) {
-    for (size_t i = 0; i < data_channels.size(); i++) {
-        _dcs.push_back(DataChannel(data_channels[i]));
+    _srv_cli(*this, service_names) {
+    for (size_t i = 0; i < dcs.size(); i++) {
+        _dcs.push_back(DataChannel(dcs[i]));
     }
+}
+
+const std::string& Session::id() const {
+    return _id;
 }
 
 const std::string& Session::peer_id() const {
@@ -37,54 +41,60 @@ const std::string& Session::peer_id() const {
 }
 
 bool Session::begin(
-        webrtc::PeerConnectionFactoryInterface* pc_factory,
-        const webrtc::MediaConstraintsInterface* pc_constraints,
-        const webrtc::PeerConnectionInterface::IceServers& ice_servers,
-        Session::ObserverPtr observer
+    webrtc::PeerConnectionFactoryInterface* pc_factory,
+    const webrtc::MediaConstraintsInterface* pc_constraints,
+    const webrtc::PeerConnectionInterface::IceServers& ice_servers,
+    Session::ObserverPtr observer
     ) {
     _observer = observer;
     if (!_open_peer_connection(pc_factory, pc_constraints, ice_servers)) {
         end();
         return false;
     }
-    if (!_open_service_clients()) {
-        end();
-        return false;
-    }
+
     return true;
 }
 
 void Session::end() {
-    _observer.reset();
     _close_peer_connection();
-    _close_service_clients();
+    _observer.reset();
+    _srv_cli.shutdown();
 }
 
-bool Session::connect() {
-    ros_webrtc::Connect srv;
-    srv.request.peer_id = _peer_id;
-    return _service_clis["connect"].call(srv);
+webrtc::PeerConnectionInterface* Session::peer_connection() {
+    return _pc.get();
 }
 
 bool Session::create_offer() {
     for (DataChannels::iterator i = _dcs.begin(); i != _dcs.end(); i++) {
         webrtc::DataChannelInit init;
         init.id = (*i).conf.id;
+        init.protocol = (*i).conf.protocol;
         init.ordered = (*i).conf.ordered;
         init.reliable = (*i).conf.reliable;
         (*i).provider = _pc->CreateDataChannel((*i).conf.label, &init);
         if ((*i).provider.get() == NULL) {
-            ROS_ERROR_STREAM("peer " << _peer_id << " data channel '" << (*i).conf.label << "' create failed");
+            ROS_ERROR(
+                "session '%s' data channel '%s' create failed",
+                _id.c_str(), (*i).conf.label.c_str()
+            );
             return false;
         }
+
+        std::string send_topic = (*i).send_topic(*this);
+        (*i).subscriber = _nh.subscribe<ros_webrtc::Data>(
+            send_topic, 1, &DataChannel::send, &(*i)
+        );
+
+        std::string recv_topic = (*i).recv_topic(*this);
         boost::shared_ptr<DataObserver> data_observer;
-        if ((*i).conf.chunk_size == 0) {
-            data_observer.reset(new UnchunkedDataObserver(
-                _dc_rpub, (*i).provider.get()
+        if ((*i).is_chunked()) {
+            data_observer.reset(new ChunkedDataObserver(
+                _nh, recv_topic, (*i).provider.get()
             ));
         } else {
-            data_observer.reset(new ChunkedDataObserver(
-                _dc_rpub, (*i).provider.get()
+            data_observer.reset(new UnchunkedDataObserver(
+                _nh, recv_topic, (*i).provider.get()
             ));
         }
         (*i).observers.push_back(data_observer);
@@ -140,8 +150,8 @@ const Session::DataChannel* Session::data_channel(const std::string& label) cons
     return NULL;
 }
 
-Session::Flush Session::flush() {
-    Session::Flush flush;
+Session::FlushStats Session::flush() {
+    Session::FlushStats flush;
     for (DataChannels::iterator i = _dcs.begin(); i != _dcs.end(); i++) {
         for (DataChannel::Observers::iterator j = (*i).observers.begin(); j != (*i).observers.end(); j++) {
             flush.reaped_data_messages += (*j)->reap();
@@ -170,81 +180,53 @@ bool Session::_open_peer_connection(
 }
 
 void Session::_close_peer_connection() {
-    if (_service_clis.find("disconnect") != _service_clis.end()) {
-        ros_webrtc::Disconnect srv;
-        srv.request.peer_id = _peer_id;
-        if (!_service_clis["disconnect"].call(srv)) {
-            ROS_ERROR_STREAM("peer " << _peer_id << " 'disconnect' call failed");
-        }
-    }
+    ros_webrtc::EndSession srv;
+    srv.request.session_id = _id;
+    srv.request.peer_id = _peer_id;
+    _srv_cli.end_session.call(srv);
+
     while (!_audio_sinks.empty()) {
         _audio_sinks.pop_front();
     }
+
     while (!_video_renderers.empty()) {
         _video_renderers.pop_front();
     }
+
     for (DataChannels::iterator i = _dcs.begin(); i != _dcs.end(); i++) {
+        (*i).subscriber.shutdown();
         while (!(*i).observers.empty()) {
             (*i).observers.pop_front();
         }
         (*i).provider = NULL;
     }
+
     if (_pc != NULL) {
         _pc->Close();
         _pc = NULL;
     }
 }
 
-bool Session::_open_service_clients() {
-    if (_service_names.find("disconnect") == _service_names.end()) {
-        return false;
-    }
-    ROS_INFO_STREAM("peer " << _peer_id << " 'disconnect' service '" <<  _service_names["disconnect"] << "'");
-    _service_clis["disconnect"] = _nh.serviceClient<ros_webrtc::Disconnect>(_service_names["disconnect"]);
-
-    if (_service_names.find("ice_candidate") == _service_names.end()) {
-        return false;
-    }
-    ROS_INFO_STREAM("peer " << _peer_id << " 'ice_candidate' service '" <<  _service_names["ice_candidate"] << "'");
-    _service_clis["ice_candidate"] = _nh.serviceClient<ros_webrtc::IceCandidate>(_service_names["ice_candidate"]);
-
-    if (_service_names.find("sdp_offer_answer") == _service_names.end()) {
-        return false;
-    }
-    ROS_INFO_STREAM("peer " << _peer_id << " 'sdp_offer_answer' service '" <<  _service_names["sdp_offer_answer"] << "'");
-    _service_clis["sdp_offer_answer"] = _nh.serviceClient<ros_webrtc::SdpOfferAnswer>(_service_names["sdp_offer_answer"]);
-
-    return true;
-}
-
-void Session::_close_service_clients() {
-    for (ServiceClients::iterator i = _service_clis.begin(); i != _service_clis.end(); i++) {
-        (*i).second.shutdown();
-    }
-}
-
 void Session::_on_local_description(webrtc::SessionDescriptionInterface* desc) {
-    ROS_INFO_STREAM("peer " << _peer_id << " local description");
-    ros_webrtc::SdpOfferAnswer srv;
+    ROS_INFO("session '%s' local description", _id.c_str());
+    ros_webrtc::SetSessionDescription srv;
+    srv.request.session_id = _id;
     srv.request.peer_id = _peer_id;
     desc->ToString(&srv.request.sdp);
     if (is_offerer())
         srv.request.type = "offer";
     else
         srv.request.type = "answer";
-    if (!_service_clis["sdp_offer_answer"].call(srv)) {
-        ROS_ERROR_STREAM("peer " << _peer_id << " 'sdp_offer_answer' call failed");
+    if (!_srv_cli.set_session_description.call(srv)) {
+        ROS_ERROR(
+            "'set_session_description' call failed for session %s, peer %s",
+            _id.c_str(), _peer_id.c_str()
+        );
     }
 }
 
 void Session::_drain_remote_ice_candidates() {
-    ROS_INFO_STREAM(
-        "peer "
-        << _peer_id
-        << " adding "
-        << _remote_ice_cadidates.size()
-        << " queued remote ice candidates"
-    );
+    ROS_INFO("session '%s' adding %zu q'd remote ice candidates", _id.c_str(), _remote_ice_cadidates.size());
     while (!_remote_ice_cadidates.empty()) {
         IceCandidatePtr ice_candidate = _remote_ice_cadidates.front();
         _remote_ice_cadidates.pop_front();
@@ -255,12 +237,66 @@ void Session::_drain_remote_ice_candidates() {
 
 // Session::DataChannel
 
-Session::DataChannel::DataChannel(const ros_webrtc::DataChannel& conf_) :
-    conf(conf_) {
-
+Session::DataChannel::DataChannel(const ros_webrtc::DataChannel& conf) :
+    conf(conf),
+    protocol(MediaType::parse(conf.protocol)) {
 }
 
-void Session::DataChannel::send(webrtc::DataBuffer& data_buffer, bool transfer) {
+bool Session::DataChannel::is_chunked() const {
+    return protocol.sub_type == "mayfield.msg.v1" && chunk_size() != 0;
+}
+
+size_t Session::DataChannel::chunk_size() const {
+    auto i = protocol.params.find("chunksize");
+    return i == protocol.params.end() ? 0 : std::atoi((*i).second.c_str());
+}
+
+std::string Session::DataChannel::send_topic(const Session& session) const {
+    std::string topic;
+    if (conf.broadcast) {
+        topic = topic_for({
+            "data_" + conf.label,
+            "send"
+        });
+    } else {
+        topic = topic_for({
+            "session_" + session.id(),
+            "peer_" + session.peer_id(),
+            "data_" + conf.label,
+            "send"
+        });
+    }
+    return topic;
+}
+
+std::string Session::DataChannel::recv_topic(const Session& session) const {
+    std::string topic;
+    if (conf.broadcast) {
+        topic = topic_for({
+            "data_" + conf.label,
+            "recv"
+        });
+    } else {
+        topic = topic_for({
+            "session_" + session.id(),
+            "peer_" + session.peer_id(),
+            "data_" + conf.label,
+            "recv"
+        });
+    }
+    return topic;
+}
+
+void Session::DataChannel::send(const ros_webrtc::DataConstPtr& msg) {
+    std::cerr.flush();
+    webrtc::DataBuffer data_buffer(
+        rtc::Buffer(&msg->buffer[0], msg->buffer.size()),
+        msg->encoding == "binary"
+    );
+    send(data_buffer);
+}
+
+void Session::DataChannel::send(webrtc::DataBuffer& data_buffer) {
     rtc::scoped_refptr<webrtc::DataChannelInterface> provider_ = provider;
     if (provider_.get() == NULL) {
         ROS_INFO(
@@ -269,12 +305,14 @@ void Session::DataChannel::send(webrtc::DataBuffer& data_buffer, bool transfer) 
         );
         return;
     }
-    if (conf.chunk_size == 0) {
+    if (!is_chunked()) {
         provider_->Send(data_buffer);
     } else {
-        // TODO: rate limit?
-        ChunkedDataTransfer xfer(generate_id(), data_buffer, conf.chunk_size);
+        ChunkedDataTransfer xfer(
+            generate_id(), data_buffer, chunk_size() == 0 ? 128 : chunk_size()
+        );
         while (!xfer.is_complete()) {
+            // TODO: rate limit?
             xfer(provider);
         }
     }
@@ -327,26 +365,29 @@ Session::PeerConnectionObserver::PeerConnectionObserver(Session& instance_) : in
 }
 
 void Session::PeerConnectionObserver::OnSignalingChange(webrtc::PeerConnectionInterface::SignalingState new_state) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " signaling change - " << new_state);
+    ROS_INFO_STREAM("session " << instance._id << " signaling change - " << new_state);
 }
 
 void Session::PeerConnectionObserver::OnStateChange(StateType state_changed) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " state - " << state_changed);
+    ROS_INFO_STREAM("session " << instance._id << " state - " << state_changed);
 }
 
 void Session::PeerConnectionObserver::OnAddStream(webrtc::MediaStreamInterface* stream) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " add stream - label: " << stream->label());
+    ROS_INFO_STREAM("session " << instance._id << " add stream - label: " << stream->label());
 
     // audio track sink
     webrtc::AudioTrackVector audio_tracks(stream->GetAudioTracks());
     for (webrtc::AudioTrackVector::iterator i = audio_tracks.begin();
          i != audio_tracks.end();
          i++) {
-        AudioSinkPtr audio_sink(new AudioSink(
-            instance._nh,
-            topic_for("session_" + instance._peer_id, "audio_" + (*i)->id()),
-            (*i).get()
-        ));
+        std::string topic = topic_for({
+            "session_" + instance._id,
+            "peer_" + instance._peer_id,
+            "audio_" + (*i)->id()
+        });
+        AudioSinkPtr audio_sink(
+            new AudioSink(instance._nh, topic, (*i).get())
+        );
         instance._audio_sinks.push_back(audio_sink);
     }
 
@@ -355,18 +396,20 @@ void Session::PeerConnectionObserver::OnAddStream(webrtc::MediaStreamInterface* 
     for (webrtc::VideoTrackVector::iterator i = video_tracks.begin();
          i != video_tracks.end();
          i++) {
-        VideoRendererPtr video_renderer(new VideoRenderer(
-            instance._nh,
-            topic_for("session_" + instance._peer_id, "video_" + (*i)->id()),
-            (*i).get()
-        ));
+        std::string topic = topic_for({
+            "session_" + instance._id,
+            "peer_" + instance._peer_id,
+            "video_" + (*i)->id()
+        });
+        VideoRendererPtr video_renderer(
+            new VideoRenderer(instance._nh, topic, (*i).get())
+        );
         instance._video_renderers.push_back(video_renderer);
     }
-
 }
 
 void Session::PeerConnectionObserver::OnRemoveStream(webrtc::MediaStreamInterface* stream) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " remove stream - label: " << stream->label());
+    ROS_INFO_STREAM("session " << instance._id << " remove stream - label: " << stream->label());
     instance._pc->RemoveStream(stream);
 
     // audio track sink
@@ -387,7 +430,9 @@ void Session::PeerConnectionObserver::OnRemoveStream(webrtc::MediaStreamInterfac
     // video track sink
     webrtc::VideoTrackVector video_tracks(stream->GetVideoTracks());
     for (webrtc::VideoTrackVector::iterator i = video_tracks.begin(); i != video_tracks.end(); i++) {
-        for (VideoRenderers::iterator j = instance._video_renderers.begin(); j != instance._video_renderers.end(); j++) {
+        for (VideoRenderers::iterator j = instance._video_renderers.begin();
+             j != instance._video_renderers.end();
+             j++) {
             if ((*i)->id() == (*j)->video_track()->id()) {
                 instance._video_renderers.erase(j);
                 break;
@@ -397,24 +442,30 @@ void Session::PeerConnectionObserver::OnRemoveStream(webrtc::MediaStreamInterfac
 }
 
 void Session::PeerConnectionObserver::OnDataChannel(webrtc::DataChannelInterface* data_channel) {
-    ROS_INFO_STREAM(
-        "peer " << instance._peer_id << " data channel - "
-        << "id: " << data_channel->id() << " "
-        << "label: " << data_channel->label()
+    ROS_INFO(
+        "session %s data channel - id: %d label: %s",
+        instance._id.c_str(), data_channel->id(), data_channel->label().c_str()
     );
     for (DataChannels::iterator i = instance._dcs.begin(); i != instance._dcs.end(); i++) {
         if ((*i).conf.label != data_channel->label()) {
             continue;
         }
         (*i).provider = data_channel;
+
+        std::string send_topic = (*i).send_topic(instance);
+        (*i).subscriber = instance._nh.subscribe<ros_webrtc::Data>(
+            send_topic, 1, &DataChannel::send, &(*i)
+        );
+
+        std::string recv_topic = (*i).recv_topic(instance);
         boost::shared_ptr<DataObserver> data_observer;
-        if ((*i).conf.chunk_size == 0) {
-            data_observer.reset(new UnchunkedDataObserver(
-                instance._dc_rpub, data_channel
+        if ((*i).is_chunked()) {
+            data_observer.reset(new ChunkedDataObserver(
+                instance._nh, recv_topic, data_channel
             ));
         } else {
-            data_observer.reset(new ChunkedDataObserver(
-                instance._dc_rpub, data_channel
+            data_observer.reset(new UnchunkedDataObserver(
+                instance._nh, recv_topic, data_channel
             ));
         }
         (*i).observers.push_back(data_observer);
@@ -422,32 +473,33 @@ void Session::PeerConnectionObserver::OnDataChannel(webrtc::DataChannelInterface
 }
 
 void Session::PeerConnectionObserver::OnRenegotiationNeeded() {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " re-negotiation needed");
+    ROS_INFO_STREAM("session " << instance._id << " re-negotiation needed");
 }
 
 void Session::PeerConnectionObserver::OnIceConnectionChange(webrtc::PeerConnectionInterface::IceConnectionState new_state) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " ice connection state - " << new_state);
+    ROS_INFO_STREAM("session " << instance._id << " ice connection state - " << new_state);
     if (instance._observer != NULL)
         instance._observer->on_connection_change(new_state);
 }
 
 void Session::PeerConnectionObserver::OnIceGatheringChange(webrtc::PeerConnectionInterface::IceGatheringState new_state) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " ice gathering state - " << new_state);
+    ROS_INFO_STREAM("session " << instance._id << " ice gathering state - " << new_state);
 }
 
 void Session::PeerConnectionObserver::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
-    ros_webrtc::IceCandidate srv;
+    ros_webrtc::AddSessionIceCandidate srv;
+    srv.request.session_id = instance._id;
     srv.request.peer_id = instance._peer_id;
     srv.request.sdp_mid = candidate->sdp_mid();
     srv.request.sdp_mline_index = candidate->sdp_mline_index();
     candidate->ToString(&srv.request.candidate);
-    if (!instance._service_clis["ice_candidate"].call(srv)) {
-        ROS_ERROR_STREAM("peer " << instance._peer_id << " 'ice_candidate' call failed");
+    if (!instance._srv_cli.add_session_ice_candidate.call(srv)) {
+        ROS_ERROR_STREAM("session " << instance._id << " 'ice_candidate' call failed");
     }
 }
 
 void Session::PeerConnectionObserver::OnIceComplete() {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " ice complete");
+    ROS_INFO_STREAM("session " << instance._id << " ice complete");
 }
 
 // Session::CreateSessionDescriptionObserver
@@ -460,7 +512,7 @@ Session::CreateSessionDescriptionObserver::~CreateSessionDescriptionObserver() {
 }
 
 void Session::CreateSessionDescriptionObserver::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " create session description succeeded");
+    ROS_INFO_STREAM("session " << instance._id << " create session description succeeded");
     if (instance._local_desc != NULL) {
         ROS_INFO_STREAM("local sdp already set, skipping");
         return;
@@ -475,7 +527,7 @@ void Session::CreateSessionDescriptionObserver::OnSuccess(webrtc::SessionDescrip
 }
 
 void Session::CreateSessionDescriptionObserver::OnFailure(const std::string& error) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " create session failed - " << error);
+    ROS_INFO_STREAM("session " << instance._id << " create session failed - " << error);
 }
 
 // Session::SetSessionDescriptionObserver
@@ -488,12 +540,12 @@ Session::SetSessionDescriptionObserver::~SetSessionDescriptionObserver() {
 }
 
 void Session::SetSessionDescriptionObserver::OnSuccess() {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " set session succeeded");
+    ROS_INFO_STREAM("session " << instance._id << " set session succeeded");
     if (instance._pc == NULL)
         return;
     if (instance.is_offerer()) {
         if (instance._pc->remote_description() == NULL) {
-            ROS_INFO_STREAM("peer " << instance._peer_id << " local sdp set succeeded");
+            ROS_INFO_STREAM("session " << instance._id << " local sdp set succeeded");
             instance._on_local_description(instance._local_desc.get());
         } else {
             ROS_INFO_STREAM("remote sdp set succeeded");
@@ -502,15 +554,29 @@ void Session::SetSessionDescriptionObserver::OnSuccess() {
     }
     else {
         if (instance._pc->local_description() != NULL) {
-            ROS_INFO_STREAM("peer " << instance._peer_id << " local sdp set succeeded");
+            ROS_INFO_STREAM("session " << instance._id << " local sdp set succeeded");
             instance._on_local_description(instance._local_desc.get());
             instance._drain_remote_ice_candidates();
         } else {
-            ROS_INFO_STREAM("peer << instance._peer_id << remote sdp set succeeded");
         }
     }
 }
 
 void Session::SetSessionDescriptionObserver::OnFailure(const std::string& error) {
-    ROS_INFO_STREAM("peer " << instance._peer_id << " set session failed - " << error);
+    ROS_INFO_STREAM("session " << instance._id << " set description failed - " << error);
+}
+
+// Session::ServiceClient
+
+Session::ServiceClient::ServiceClient(Session &instance, const std::map<std::string, std::string>& names) :
+    _instance(instance),
+    end_session(instance._nh.serviceClient<ros_webrtc::EndSession>(names.find("end_session")->second)),
+    add_session_ice_candidate(instance._nh.serviceClient<ros_webrtc::AddSessionIceCandidate>(names.find("add_session_ice_candidate")->second)),
+    set_session_description(instance._nh.serviceClient<ros_webrtc::SetSessionDescription>(names.find("set_session_description")->second)) {
+}
+
+void Session::ServiceClient::shutdown() {
+    end_session.shutdown();
+    add_session_ice_candidate.shutdown();
+    set_session_description.shutdown();
 }

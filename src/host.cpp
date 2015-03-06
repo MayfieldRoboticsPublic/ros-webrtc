@@ -49,8 +49,9 @@ AudioSource::AudioSource(
 
 // HostFactory
 
-Host HostFactory::operator()() {
+Host HostFactory::operator()(ros::NodeHandle &nh) {
     return Host(
+        nh,
         video_srcs,
         audio_src,
         session_constraints,
@@ -61,22 +62,27 @@ Host HostFactory::operator()() {
 // Host
 
 Host::Host(
+    ros::NodeHandle& nh,
     const std::vector<VideoSource>& video_srcs,
     const AudioSource& audio_src,
     const MediaConstraints& session_constraints,
     const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers
     ) :
+    _nh(nh),
     _video_srcs(video_srcs),
     _audio_src(audio_src),
     _session_constraints(session_constraints),
-    _ice_servers(ice_servers) {
+    _ice_servers(ice_servers),
+    _srv(*this) {
 }
 
 Host::Host(const Host& other) :
+    _nh(other._nh),
     _video_srcs(other._video_srcs),
     _audio_src(other._audio_src),
     _session_constraints(other._session_constraints),
-    _ice_servers(other._ice_servers) {
+    _ice_servers(other._ice_servers),
+    _srv(*this) {
 }
 
 Host::~Host() {
@@ -84,7 +90,6 @@ Host::~Host() {
 }
 
 bool Host::open() {
-    _dc_rpub = _nh.advertise<ros_webrtc::Data>(topic_for("data_recv"), 1000, false);
     if (!_create_pc_factory()) {
         close();
         return false;
@@ -93,10 +98,7 @@ bool Host::open() {
         close();
         return false;
     }
-    if (!_open_servers()) {
-        close();
-        return false;
-    }
+    _srv.advertise();
     return true;
 }
 
@@ -105,85 +107,65 @@ bool Host::is_open() const {
 }
 
 void Host::close() {
-    _close_servers();
+    _srv.shutdown();
     _close_local_stream();
     _pc_factory.release();
     _worker_thd.reset();
     _signaling_thd.reset();
-    _dc_rpub.shutdown();
 }
 
 SessionPtr Host::begin_session(
+    const std::string& id,
     const std::string& peer_id,
     const MediaConstraints& sdp_constraints,
     const std::vector<ros_webrtc::DataChannel>& data_channels,
     const std::map<std::string, std::string>& service_names
     ) {
-    ROS_INFO_STREAM("creating session for peer " << peer_id);
+    ROS_INFO("creating session id='%s', peer='%s'", id.c_str(), peer_id.c_str());
+    SessionKey key = {id, peer_id};
+    if (_sessions.find(key) != _sessions.end()) {
+        ROS_ERROR("session w/ id='%s', peer='%s' already exists", id.c_str(), peer_id.c_str());
+        return NULL;
+    }
     SessionPtr s(new Session(
+        id,
         peer_id,
         _local_stream,
         sdp_constraints,
-        _dc_rpub,
         data_channels,
         service_names
     ));
-    Session::ObserverPtr pc_observer(
-        new SessionObserver(*this, s)
-    );
-    if (!s->begin(_pc_factory, &_session_constraints, _ice_servers, pc_observer)) {
+    Session::ObserverPtr pc_observer(new SessionObserver(*this, s));
+    if (!s->begin(
+        _pc_factory,
+        &_session_constraints,
+        _ice_servers,
+        pc_observer
+        ))
         return SessionPtr();
-    }
-    _sessions.push_back(s);
+    _sessions[key] = s;
     return s;
 }
 
-bool Host::end_session(const std::string& peer_id) {
-    for (Sessions::iterator i = _sessions.begin(); i != _sessions.end(); i++) {
-        if ((*i)->peer_id() == peer_id) {
-            ROS_INFO_STREAM("ending session for peer '" << peer_id << "'");
-            (*i)->end();
-            _sessions.erase(i);
-            return true;
-        }
+bool Host::end_session(const std::string& id, const std::string& peer_id) {
+    SessionKey key = {id, peer_id};
+    auto i = _sessions.find(key);
+    if (i == _sessions.end()) {
+        ROS_INFO("no session w/ id='%s' peer='%s'", id.c_str(), peer_id.c_str());
+        return false;
     }
-    ROS_INFO_STREAM("not session for for peer '" << peer_id << "' to end");
-    return false;
+    (*i).second->end();
+    _sessions.erase(i);
+    return true;
 }
 
-Host::Sessions& Host::sessions() {
-    return _sessions;
-}
-
-const Host::Sessions& Host::sessions() const {
-    return _sessions;
-}
-
-Host::Flush Host::flush() {
-    Flush flush;
-    for (Sessions::iterator i = _sessions.begin(); i != _sessions.end(); i++) {
-        Session::Flush session_flush = (*i)->flush();
+Host::FlushStats Host::flush() {
+    FlushStats flush;
+    for (auto i = _sessions.begin(); i != _sessions.end(); i++) {
+        auto session_flush = (*i).second->flush();
         flush += session_flush;
     }
     return flush;
-}
-
-SessionPtr Host::session(const std::string& peer_id) {
-    for (Sessions::iterator i = _sessions.begin(); i != _sessions.end(); i++) {
-        if ((*i)->peer_id() == peer_id) {
-            return (*i);
-        }
-    }
-    return SessionPtr();
-}
-
-SessionConstPtr Host::session(const std::string& peer_id) const {
-    for (Sessions::const_iterator i = _sessions.begin(); i != _sessions.end(); i++) {
-        if ((*i)->peer_id() == peer_id) {
-            return (*i);
-        }
-    }
-    return SessionConstPtr();
 }
 
 bool Host::_create_pc_factory() {
@@ -231,14 +213,25 @@ bool Host::_open_local_stream() {
     _local_stream = _pc_factory->CreateLocalMediaStream(stream_label);
 
     ROS_DEBUG_STREAM("creating system device manager");
-    rtc::scoped_ptr<cricket::DeviceManagerInterface> sys_dev_mgr(cricket::DeviceManagerFactory::Create());
+    rtc::scoped_ptr<cricket::DeviceManagerInterface> sys_dev_mgr(
+        cricket::DeviceManagerFactory::Create()
+    );
     if (!sys_dev_mgr->Init()) {
         ROS_ERROR_STREAM("cannot create system device manager");
         return false;
     }
 
     ROS_DEBUG_STREAM("creating ros device manager");
-    rtc::scoped_ptr<cricket::DeviceManagerInterface> ros_dev_mgr(new ROSDeviceManager());
+    ROSVideoCaptureTopicInfoPtr video_capture_topics(new ROSVideoCaptureTopicInfo());
+    for (size_t i = 0; i != _video_srcs.size(); i++) {
+        VideoSource& video_src = _video_srcs[i];
+        if (video_src.type != VideoSource::ROSType)
+            continue;
+        video_capture_topics->add(video_src.name);
+    }
+    rtc::scoped_ptr<cricket::DeviceManagerInterface> ros_dev_mgr(
+        new ROSDeviceManager(video_capture_topics)
+    );
     if (!ros_dev_mgr->Init()) {
         ROS_ERROR_STREAM("cannot create ros device manager");
         return false;
@@ -264,7 +257,9 @@ bool Host::_open_local_stream() {
     }
     if (_audio_src.publish) {
         _audio_sink.reset(new AudioSink(
-            _nh, topic_for("local", "audio_" + audio_track->id()), audio_track
+            _nh,
+            topic_for({"local", "audio_" + audio_track->id()}),
+            audio_track
         ));
     }
     _local_stream->AddTrack(audio_track);
@@ -322,7 +317,7 @@ bool Host::_open_local_stream() {
         video_capturer.release();
         if (video_src.publish) {
             VideoRendererPtr video_renderer(new VideoRenderer(
-                _nh, topic_for("local", "video_" + video_track->id()), video_track
+                _nh, topic_for({"local", "video_" + video_track->id()}), video_track
             ));
             _video_renderers.push_back(video_renderer);
         }
@@ -340,24 +335,48 @@ void Host::_close_local_stream() {
     _local_stream = NULL;
 }
 
-bool Host::_open_servers() {
-    _rsrvs.push_back(_nh.advertiseService(service_for("connect"), &Host::_serve_connect, this));
-    _rsrvs.push_back(_nh.advertiseService(service_for("disconnect"), &Host::_serve_disconnect, this));
-    _rsrvs.push_back(_nh.advertiseService(service_for("ice_candidate"), &Host::_serve_ice_candidate, this));
-    _rsrvs.push_back(_nh.advertiseService(service_for("sdp_offer_answer"), &Host::_serve_sdp_offer_answer, this));
-    _rsrvs.push_back(_nh.advertiseService(service_for("sessions"), &Host::_serve_sessions, this));
-    _rsubs.push_back(_nh.subscribe(topic_for("data_send"), 1000, &Host::_handle_send, this));
-    return true;
+SessionPtr Host::_find_session(const SessionKey& key) {
+    auto i = _sessions.find(key);
+    if (i == _sessions.end())
+        return NULL;
+    return (*i).second;
 }
 
-void Host::_close_servers() {
-    _rsrvs.clear();
-    _rsubs.clear();
+SessionConstPtr Host::_find_session(const SessionKey& key) const {
+    auto i = _sessions.find(key);
+    if (i == _sessions.end())
+        return NULL;
+    return (*i).second;
 }
 
-bool Host::_serve_connect(ros::ServiceEvent<ros_webrtc::Connect::Request, ros_webrtc::Connect::Response>& event) {
-    const ros_webrtc::Connect::Request &req = event.getRequest();
-    ROS_INFO_STREAM("serve 'connect' for peer " << req.peer_id);
+// Host::Flush
+
+Host::FlushStats& Host::FlushStats::operator += (const Session::FlushStats & rhs) {
+    reaped_data_messages += rhs.reaped_data_messages;
+    return *this;
+}
+
+// Host::Service
+
+Host::Service::Service(Host& instance) : _instance(instance) {
+}
+
+void Host::Service::advertise() {
+    _srvs.push_back(_instance._nh.advertiseService(service_for("begin_session"), &Host::Service::begin_session, this));
+    _srvs.push_back(_instance._nh.advertiseService(service_for("end_session"), &Host::Service::end_session, this));
+    _srvs.push_back(_instance._nh.advertiseService(service_for("connect_session"), &Host::Service::connect_session, this));
+    _srvs.push_back(_instance._nh.advertiseService(service_for("add_session_ice_candidate"), &Host::Service::add_session_ice_candidate, this));
+    _srvs.push_back(_instance._nh.advertiseService(service_for("set_session_description"), &Host::Service::set_session_description, this));
+    _srvs.push_back(_instance._nh.advertiseService(service_for("get_session"), &Host::Service::get_session, this));
+    _srvs.push_back(_instance._nh.advertiseService(service_for("get_host"), &Host::Service::get_host, this));
+}
+
+void Host::Service::shutdown() {
+    _srvs.clear();
+}
+
+bool Host::Service::begin_session(ros::ServiceEvent<ros_webrtc::BeginSession::Request, ros_webrtc::BeginSession::Response>& event) {
+    const auto &req = event.getRequest();
     MediaConstraints sdp_constraints;
     for(size_t i = 0; i != req.sdp_constraints.mandatory.size(); i++) {
         sdp_constraints.mandatory().push_back(MediaConstraints::Constraint(
@@ -372,105 +391,188 @@ bool Host::_serve_connect(ros::ServiceEvent<ros_webrtc::Connect::Request, ros_we
         ));
     }
     std::map<std::string, std::string> service_names;
-    service_names.insert(
-        std::map<std::string, std::string>::value_type("disconnect", req.disconnect_service)
-    );
-    service_names.insert(
-        std::map<std::string, std::string>::value_type("ice_candidate", req.ice_candidate_service)
-    );
-    service_names.insert(
-        std::map<std::string, std::string>::value_type("sdp_offer_answer", req.sdp_offer_answer_service)
-    );
-    SessionPtr session(begin_session(
-        req.peer_id, sdp_constraints, req.data_channels, service_names
+    service_names["end_session"] = req.end_session;
+    service_names["add_session_ice_candidate"] = req.add_session_ice_candidate;
+    service_names["set_session_description"] = req.set_session_description;
+    SessionPtr session(_instance.begin_session(
+        req.session_id, req.peer_id, sdp_constraints, req.data_channels, service_names
     ));
+    return session != NULL;
+}
+
+bool Host::Service::end_session(ros::ServiceEvent<ros_webrtc::EndSession::Request, ros_webrtc::EndSession::Response>& event) {
+    const auto& req = event.getRequest();
+    return _instance.end_session(req.session_id, req.peer_id);
+}
+
+bool Host::Service::connect_session(ros::ServiceEvent<ros_webrtc::ConnectSession::Request, ros_webrtc::ConnectSession::Response>& event) {
+    const auto& req = event.getRequest();
+    SessionKey key = {req.session_id, req.peer_id};
+    SessionPtr session = _instance._find_session(key);
+    if (session == NULL)
+        return false;
     if (!session->create_offer()) {
-        end_session(req.peer_id);
         return false;
     }
     return true;
 }
 
-bool Host::_serve_disconnect(ros::ServiceEvent<ros_webrtc::Disconnect::Request, ros_webrtc::Disconnect::Response>& event) {
-    const ros_webrtc::Disconnect::Request& req = event.getRequest();
-    ROS_INFO_STREAM("serve 'disconnect' for peer " << req.peer_id);
-    SessionPtr s(session(req.peer_id));
-    if (s == NULL) {
-        ROS_INFO_STREAM("no session for peer " << req.peer_id);
+bool Host::Service::add_session_ice_candidate(ros::ServiceEvent<ros_webrtc::AddSessionIceCandidate::Request, ros_webrtc::AddSessionIceCandidate::Response>& event) {
+    const auto& req = event.getRequest();
+    SessionKey key = {req.session_id, req.peer_id};
+    SessionPtr session = _instance._find_session(key);
+    if (session == NULL)
         return false;
-    }
-    end_session(req.peer_id);
-    return true;
-}
-
-bool Host::_serve_ice_candidate(ros::ServiceEvent<ros_webrtc::IceCandidate::Request, ros_webrtc::IceCandidate::Response>& event) {
-    const ros_webrtc::IceCandidate::Request &req = event.getRequest();
-    ROS_INFO_STREAM("serve 'ice_candidate' for peer " << req.peer_id);
-    SessionPtr s(session(req.peer_id));
-    if (s == NULL) {
-        ROS_INFO_STREAM("no session for peer " << req.peer_id);
-        return false;
-    }
     rtc::scoped_ptr<webrtc::IceCandidateInterface> ice_candidate(webrtc::CreateIceCandidate(
         req.sdp_mid, req.sdp_mline_index, req.candidate
     ));
-    s->add_remote_ice_candidate(ice_candidate.get());
+    session->add_remote_ice_candidate(ice_candidate.get());
     return true;
 }
 
-bool Host::_serve_sdp_offer_answer(ros::ServiceEvent<ros_webrtc::SdpOfferAnswer::Request, ros_webrtc::SdpOfferAnswer::Response>& event) {
-    const ros_webrtc::SdpOfferAnswer::Request &req = event.getRequest();
-    ROS_INFO_STREAM("serve 'sdp_offer_answer' for peer " << req.peer_id);
-    SessionPtr s(session(req.peer_id));
-    if (s == NULL) {
-        ROS_INFO_STREAM("no session for peer " << req.peer_id);
+bool Host::Service::set_session_description(ros::ServiceEvent<ros_webrtc::SetSessionDescription::Request, ros_webrtc::SetSessionDescription::Response>& event) {
+    const auto& req = event.getRequest();
+    SessionKey key = {req.session_id, req.peer_id};
+    SessionPtr session = _instance._find_session(key);
+    if (session == NULL)
         return false;
-    }
-    webrtc::SessionDescriptionInterface* desc = webrtc::CreateSessionDescription(req.type, req.sdp);
-    s->set_remote_session_description(desc);
-    if (!s->is_offerer()) {
-        s->create_answer();
-    }
-    return true;
-}
-
-bool Host::_serve_sessions(ros::ServiceEvent<ros_webrtc::Sessions::Request, ros_webrtc::Sessions::Response>& event) {
-    Host::Sessions ss(sessions());
-    ros_webrtc::Sessions::Response& resp = event.getResponse();
-    for(Host::Sessions::iterator i = ss.begin(); i != ss.end(); i++)  {
-        resp.peer_ids.push_back((*i)->peer_id());
+    auto desc = webrtc::CreateSessionDescription(req.type, req.sdp);
+    session->set_remote_session_description(desc);
+    if (!session->is_offerer()) {
+        session->create_answer();
     }
     return true;
 }
 
-void Host::_handle_send(const ros_webrtc::DataConstPtr& msg) {
-    webrtc::DataBuffer data_buffer(
-        rtc::Buffer(&msg->buffer[0], msg->buffer.size()),
-        msg->encoding == "binary"
-    );
-    Host::Sessions ss(sessions());
-    for(Host::Sessions::iterator i = ss.begin(); i != ss.end(); i++)  {
-        Session::DataChannel* data_channel = (*i)->data_channel(msg->label);
-        if (data_channel == NULL) {
-            continue;
+bool Host::Service::get_session(ros::ServiceEvent<ros_webrtc::GetSession::Request, ros_webrtc::GetSession::Response>& event) {
+    const auto &req = event.getRequest();
+    SessionKey key = {req.session_id, req.peer_id};
+    SessionPtr session = _instance._find_session(key);
+    if (session == NULL)
+        return false;
+    auto &resp = event.getResponse();
+    webrtc::scoped_refptr<webrtc::PeerConnectionInterface> pc(session->peer_connection());
+    if (pc.get() != NULL) {
+        switch (session->peer_connection()->signaling_state()) {
+            case webrtc::PeerConnectionInterface::SignalingState::kStable:
+                resp.signaling_state = "stable";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kHaveLocalOffer:
+                resp.signaling_state = "have_local_offer";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kHaveLocalPrAnswer:
+                resp.signaling_state = "have_local_pr_answer";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kHaveRemoteOffer:
+                resp.signaling_state = "have_remote_offer";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kHaveRemotePrAnswer:
+                resp.signaling_state = "have_remote_pr_answer";
+                break;
+            case webrtc::PeerConnectionInterface::SignalingState::kClosed:
+                resp.signaling_state = "closed";
+                break;
+        };
+    }
+    return true;
+}
+
+bool Host::Service::get_host(ros::ServiceEvent<ros_webrtc::GetHost::Request, ros_webrtc::GetHost::Response>& event) {
+    const auto &req = event.getRequest();
+    auto &resp = event.getResponse();
+    for (auto i = _instance._session_constraints.mandatory().begin();
+         i != _instance._session_constraints.mandatory().end();
+         i++) {
+        ros_webrtc::Constraint constraint;
+        constraint.key = (*i).key;
+        constraint.value = (*i).value;
+        resp.sdp_constraints.mandatory.push_back(constraint);
+    }
+    for (auto i = _instance._session_constraints.optional().begin();
+         i != _instance._session_constraints.optional().end();
+         i++) {
+        ros_webrtc::Constraint constraint;
+        constraint.key = (*i).key;
+        constraint.value = (*i).value;
+        resp.sdp_constraints.optional.push_back(constraint);
+    }
+    webrtc::AudioTrackVector audio_tracks = _instance._local_stream->GetAudioTracks();
+    for (auto i = audio_tracks.begin(); i != audio_tracks.end(); i++) {
+        ros_webrtc::Track track;
+        track.kind = (*i)->kind();
+        track.id = (*i)->id();
+        switch ((*i)->state()) {
+            case webrtc::MediaStreamTrackInterface::kInitializing:
+                track.state = "initializing";
+                break;
+            case webrtc::MediaStreamTrackInterface::kLive:
+                track.state = "live";
+                break;
+            case webrtc::MediaStreamTrackInterface::kEnded:
+                track.state = "ended";
+                break;
+            case webrtc::MediaStreamTrackInterface::kFailed:
+                track.state = "failed";
+                break;
+            default:
+                track.state = "unknown";
+                break;
         }
-        data_channel->send(data_buffer);
+        track.enabled = (*i)->enabled();
+        resp.tracks.push_back(track);
     }
+    webrtc::VideoTrackVector video_tracks = _instance._local_stream->GetVideoTracks();
+    for (auto i = video_tracks.begin(); i != video_tracks.end(); i++) {
+        ros_webrtc::Track track;
+        track.kind = (*i)->kind();
+        track.id = (*i)->id();
+        switch ((*i)->state()) {
+            case webrtc::MediaStreamTrackInterface::kInitializing:
+                track.state = "initializing";
+                break;
+            case webrtc::MediaStreamTrackInterface::kLive:
+                track.state = "live";
+                break;
+            case webrtc::MediaStreamTrackInterface::kEnded:
+                track.state = "ended";
+                break;
+            case webrtc::MediaStreamTrackInterface::kFailed:
+                track.state = "failed";
+                break;
+            default:
+                track.state = "unknown";
+                break;
+        }
+        track.enabled = (*i)->enabled();
+        resp.tracks.push_back(track);
+    }
+    for (auto i = _instance._sessions.begin(); i != _instance._sessions.end(); i++) {
+        ros_webrtc::SessionKey key;
+        key.id = (*i).second->id();
+        key.peer_id = (*i).second->peer_id();
+        resp.sessions.push_back(key);
+    }
+    return true;
 }
 
-// Host::Flush
+// Host::EndSessionCallback
 
-Host::Flush& Host::Flush::operator += (const Session::Flush & rhs) {
-    reaped_data_messages += rhs.reaped_data_messages;
-    return *this;
+Host::EndSessionCallback::EndSessionCallback(Host& instance, const SessionKey& key) :
+    _instance(instance),
+    _key(key) {
 }
+
+ros::CallbackInterface::CallResult Host::EndSessionCallback::call() {
+    _instance.end_session(_key.id, _key.peer_id);
+    return Success;
+}
+
 
 // Host::SessionObserver
 
-Host::SessionObserver::SessionObserver(
-    Host& instance_,
-    SessionPtr session_
-    ) : instance(instance_), session(session_) {
+Host::SessionObserver::SessionObserver(Host& instance, SessionPtr session) :
+    _instance(instance),
+    _session(session) {
 }
 
 Host::SessionObserver::~SessionObserver() {
@@ -478,6 +580,8 @@ Host::SessionObserver::~SessionObserver() {
 
 void Host::SessionObserver::on_connection_change(webrtc::PeerConnectionInterface::IceConnectionState state) {
     if (state == webrtc::PeerConnectionInterface::kIceConnectionDisconnected) {
-        instance.end_session(session->peer_id());
+        SessionKey key = {_session->id(), _session->peer_id()};
+        ros::CallbackInterfacePtr callback(new Host::EndSessionCallback(_instance, key));
+        _instance._nh.getCallbackQueue()->addCallback(callback);
     }
 }

@@ -7,43 +7,42 @@
 #include "host.h"
 #include "media_constraints.h"
 
-/*
- * @class Config
- * @brief Configuration settings read from ROS params.
+/**
+ * \brief Configuration settings read from ROS params.
  */
 class Config {
 
 public:
 
     /**
-     * @brief Factory function used to load configuration settings from ROS params.
-     * @return Instance representing loaded ROS params.
+     * \brief Factory function used to load configuration settings from ROS params.
+     * \return Instance representing loaded ROS params.
      *
      * The ROS params look something like:
      *
-     * @code{.yaml}
+     * \code{.yaml}
 
        cameras:
         downward:
-          name: ros:///downward_facing_camera/image_raw
+          name: ros:///downward_looking_camera/image_raw
           label: downward
         upward:
-          name: ros:///upward_facing_camera/image_raw
+          name: ros:///upward_looking_camera/image_raw
           label: upward
        session:
-         constraints:
-           optional:
-             DtlsSrtpKeyAgreement: "true"
+        constraints:
+          optional:
+          DtlsSrtpKeyAgreement: "true"
        ice_servers:
        - uri: stun:stun.services.mozilla.com:3478
        - uri: stun:stun.l.google.com:19302
 
-     * @endcode
+     * \endcode
      */
-    static Config get();
+    static Config get(ros::NodeHandle& nh);
 
     /**
-     * @brief Persists configuration settings to ROS params.
+     * \brief Persists configuration settings to ROS params.
      */
     void set();
 
@@ -57,7 +56,7 @@ public:
 
     IceServers ice_servers; /*! Servers to use for ICE. */
 
-    int flush_frequency; /*! Number of seconds between device/session flushes . */
+    double flush_frequency; /*! Number of seconds between device/session flushes . */
 
 private:
 

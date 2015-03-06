@@ -11,7 +11,8 @@ struct Flush {
 
     Flush(Host& host) : host(host) {}
 
-    void operator () (const ros::WallTimerEvent& event) {
+    void operator()(const ros::TimerEvent& event) {
+        ROS_INFO("flushing");
         host.flush();
     }
 
@@ -23,8 +24,10 @@ int main(int argc, char **argv) {
     ROS_INFO("initializing ros");
     ros::init(argc, argv, "webrtc", ros::init_options::AnonymousName);
 
+    ros::NodeHandle nh("~");
+
     ROS_INFO("loading config");
-    Config config(Config::get());
+    Config config(Config::get(nh));
 
     ROS_INFO("initializing ssl");
     if (!rtc::InitializeSSL()) {
@@ -42,7 +45,7 @@ int main(int argc, char **argv) {
         host_factory.ice_servers.push_back(config.ice_servers[i]);
     }
     host_factory.session_constraints = config.session_constraints;
-    Host host = host_factory();
+    Host host = host_factory(nh);
 
     ROS_INFO("opening host ... ");
     if (!host.open()) {
@@ -51,11 +54,10 @@ int main(int argc, char **argv) {
     }
     ROS_INFO("opened host");
 
-    ROS_INFO("scheduling host flush every %d sec(s) ... ", config.flush_frequency);
-    ros::NodeHandle nh;
+    ROS_INFO("scheduling host flush every %0.1f sec(s) ... ", config.flush_frequency);
     Flush flush(host);
-    ros::WallTimer flush_timer = nh.createWallTimer(
-        ros::WallDuration(config.flush_frequency), flush, false
+    ros::Timer flush_timer = nh.createTimer(
+        ros::Duration(config.flush_frequency), flush
     );
 
     ROS_INFO("start spinning");
