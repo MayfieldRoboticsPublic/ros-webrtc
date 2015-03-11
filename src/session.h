@@ -102,9 +102,7 @@ public:
 
     void set_remote_session_description(webrtc::SessionDescriptionInterface* sdp);
 
-    class DataChannel {
-
-    public:
+    struct DataChannel {
 
         DataChannel(const ros_webrtc::DataChannel& conf);
 
@@ -120,7 +118,7 @@ public:
 
         std::string recv_topic(const Session& session) const;
 
-        const ros_webrtc::DataChannel conf;
+        ros_webrtc::DataChannel conf;
 
         MediaType protocol;
 
