@@ -28,9 +28,9 @@ Config Config::get(ros::NodeHandle& nh) {
     // ice_servers
     XmlRpc::XmlRpcValue ice_servers_xml;
     if (nh.getParam(param_for("ice_servers"), ice_servers_xml)) {
-        for (XmlRpc::XmlRpcValue::iterator i = cameras_xml.begin(); i != cameras_xml.end(); i++) {
+        for (size_t i = 0; i != ice_servers_xml.size(); i++) {
             webrtc::PeerConnectionInterface::IceServer ice_server;
-            if (_get(nh, ros::names::append(param_for("ice_servers"), (*i).first), ice_server)) {
+            if (_get(nh, ice_servers_xml[0], ice_server)) {
                 instance.ice_servers.push_back(ice_server);
             }
         }
@@ -50,26 +50,7 @@ Config Config::get(ros::NodeHandle& nh) {
 }
 
 void Config::set() {
-    ros::NodeHandle nh;
-
-    // cameras
-    for(size_t i = 0; i != cameras.size(); i++) {
-        _set(nh, ros::names::append("webrtc/cameras", cameras[i].name), cameras[i]);
-    }
-
-    // microphone
-    _set(nh, "microphone", microphone);
-
-    // session constraints
-    _set(nh, "webrtc/session/constraints", session_constraints);
-
-    // ice servers
-    size_t index = 0;
-    for(webrtc::PeerConnectionInterface::IceServers::const_iterator i = ice_servers.begin(); i != ice_servers.end(); i++) {
-        std::ostringstream oss;
-        oss << index;
-        _set(nh, ros::names::append("webrtc/ice_servers", oss.str()), (*i));
-    }
+    throw std::runtime_error("Not implemented.");
 }
 
 bool Config::_get(ros::NodeHandle& nh, const std::string& root, VideoSource& value) {
@@ -93,19 +74,6 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, VideoSource& val
     return true;
 }
 
-void Config::_set(ros::NodeHandle& nh, const std::string& root, const VideoSource& value) {
-    std::string scheme;
-    switch (value.type) {
-        case VideoSource::ROSType:
-            scheme = "ros://";
-            break;
-    }
-    nh.setParam(ros::names::append(root, "name"), scheme + value.name);
-    nh.setParam(ros::names::append(root, "label"), value.label);
-    _set(nh, ros::names::append(root, "constraints"), value.constraints);
-    nh.setParam(ros::names::append(root, "publish"), value.publish);
-}
-
 bool Config::_get(ros::NodeHandle& nh, const std::string& root, AudioSource& value) {
     nh.getParam(ros::names::append(root, "label"), value.label);
     if (!_get(nh, ros::names::append(root, "constraints"), value.constraints)) {
@@ -113,12 +81,6 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, AudioSource& val
     }
     nh.getParam(ros::names::append(root, "publish"), value.publish);
     return true;
-}
-
-void Config::_set(ros::NodeHandle& nh, const std::string& root, const AudioSource& value) {
-    nh.setParam(ros::names::append(root, "label"), value.label);
-    _set(nh, ros::names::append(root, "constraints"), value.constraints);
-    nh.setParam(ros::names::append(root, "publish"), value.publish);
 }
 
 bool Config::_get(ros::NodeHandle& nh, const std::string& root, MediaConstraints& value) {
@@ -143,37 +105,18 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, MediaConstraints
     return true;
 }
 
-void Config::_set(ros::NodeHandle& nh, const std::string& root, const MediaConstraints& value) {
-    typedef std::map<std::string, std::string> Constraints;
-    Constraints constraints;
-    std::string key;
-
-    key = ros::names::append(root, "mandatory");
-    constraints.clear();
-    for(MediaConstraints::Constraints::const_iterator i = value.mandatory().begin(); i != value.mandatory().begin(); i++) {
-        constraints.insert(Constraints::value_type((*i).key, (*i).value));
-    }
-    nh.setParam(key, constraints);
-
-    key = ros::names::append(root, "optional");
-    constraints.clear();
-    for(MediaConstraints::Constraints::const_iterator i = value.optional().begin(); i != value.optional().begin(); i++) {
-        constraints.insert(Constraints::value_type((*i).key, (*i).value));
-    }
-    nh.setParam(key, constraints);
-}
-
-bool Config::_get(ros::NodeHandle& nh, const std::string& root, webrtc::PeerConnectionInterface::IceServer& value) {
-    if (!nh.getParam(ros::names::append(root, "uri"), value.uri)) {
+bool Config::_get(ros::NodeHandle& nh, XmlRpc::XmlRpcValue& root, webrtc::PeerConnectionInterface::IceServer& value) {
+    if (!root.hasMember("uri")) {
         return false;
     }
-    nh.getParam(ros::names::append(root, "username"), value.username);
-    nh.getParam(ros::names::append(root, "password"), value.password);
+    value.uri = std::string(root["uri"]);
+    if (root.hasMember("username"))
+        value.username = std::string(root["username"]);
+    else
+        value.username.clear();
+    if (root.hasMember("password"))
+        value.password = std::string(root["password"]);
+    else
+        value.password.clear();
     return true;
-}
-
-void Config::_set(ros::NodeHandle& nh, const std::string& root, const webrtc::PeerConnectionInterface::IceServer& value) {
-    nh.setParam(ros::names::append(root, "uri"), value.uri);
-    nh.setParam(ros::names::append(root, "username"), value.username);
-    nh.setParam(ros::names::append(root, "password"), value.password);
 }
