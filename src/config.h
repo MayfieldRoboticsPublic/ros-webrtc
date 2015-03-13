@@ -62,19 +62,11 @@ private:
 
     static bool _get(ros::NodeHandle& nh, const std::string& root, VideoSource& value);
 
-    static void _set(ros::NodeHandle& nh, const std::string& root, const VideoSource& value);
-
     static bool _get(ros::NodeHandle& nh, const std::string& root, AudioSource& value);
-
-    static void _set(ros::NodeHandle& nh, const std::string& root, const AudioSource& value);
 
     static bool _get(ros::NodeHandle& nh, const std::string& root, MediaConstraints& value);
 
-    static void _set(ros::NodeHandle& nh, const std::string& root, const MediaConstraints& value);
-
-    static bool _get(ros::NodeHandle& nh, const std::string& root, webrtc::PeerConnectionInterface::IceServer& value);
-
-    static void _set(ros::NodeHandle& nh, const std::string& root, const webrtc::PeerConnectionInterface::IceServer& value);
+    static bool _get(ros::NodeHandle& nh, XmlRpc::XmlRpcValue& root, webrtc::PeerConnectionInterface::IceServer& value);
 
 };
 
