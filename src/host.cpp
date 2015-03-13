@@ -125,7 +125,7 @@ SessionPtr Host::begin_session(
     SessionKey key = {id, peer_id};
     if (_sessions.find(key) != _sessions.end()) {
         ROS_ERROR("session w/ id='%s', peer='%s' already exists", id.c_str(), peer_id.c_str());
-        return NULL;
+        return SessionPtr();
     }
     SessionPtr s(new Session(
         id,
@@ -338,14 +338,14 @@ void Host::_close_local_stream() {
 SessionPtr Host::_find_session(const SessionKey& key) {
     auto i = _sessions.find(key);
     if (i == _sessions.end())
-        return NULL;
+        return SessionPtr();
     return (*i).second;
 }
 
 SessionConstPtr Host::_find_session(const SessionKey& key) const {
     auto i = _sessions.find(key);
     if (i == _sessions.end())
-        return NULL;
+        return SessionConstPtr();
     return (*i).second;
 }
 

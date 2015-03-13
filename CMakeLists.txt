@@ -161,7 +161,7 @@ target_link_libraries(host
 )
 
 ## Specify additional compile flags
-foreach(cxx_flag "-std=c++11" ${jingle_CFLAGS} ${jsoncpp_CFLAGS})
+foreach(cxx_flag "-std=c++0x" ${jingle_CFLAGS} ${jsoncpp_CFLAGS})
   set_property(TARGET host APPEND_STRING PROPERTY COMPILE_FLAGS " ${cxx_flag}")
 endforeach(cxx_flag)
 
