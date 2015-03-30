@@ -31,15 +31,7 @@ std::string topic_for(std::initializer_list<std::string> parts) {
     return path;
 }
 
-std::string service_for(const std::string& name) {
-    return normalize_name(name);
-}
-
 std::string topic_for(const std::string& name) {
-    return normalize_name(name);
-}
-
-std::string param_for(const std::string& name) {
     return normalize_name(name);
 }
 

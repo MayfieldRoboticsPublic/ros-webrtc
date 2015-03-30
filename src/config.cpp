@@ -8,10 +8,10 @@ Config Config::get(ros::NodeHandle& nh) {
 
     // cameras
     XmlRpc::XmlRpcValue cameras_xml;
-    if (nh.getParam(param_for("cameras/"), cameras_xml)) {
+    if (nh.getParam("cameras/", cameras_xml)) {
         for (XmlRpc::XmlRpcValue::iterator i = cameras_xml.begin(); i != cameras_xml.end(); i++) {
             VideoSource camera;
-            if (_get(nh, ros::names::append(param_for("cameras/"), (*i).first), camera)) {
+            if (_get(nh, ros::names::append("cameras/", (*i).first), camera)) {
                 instance.cameras.push_back(camera);
             }
         }
@@ -20,14 +20,14 @@ Config Config::get(ros::NodeHandle& nh) {
     }
 
     // microphone
-    _get(nh, param_for("microphone"), instance.microphone);
+    _get(nh, "microphone", instance.microphone);
 
     // session constraints
-    _get(nh, param_for(ros::names::append("session", "constraints")), instance.session_constraints);
+    _get(nh, ros::names::append("session", "constraints"), instance.session_constraints);
 
     // ice_servers
     XmlRpc::XmlRpcValue ice_servers_xml;
-    if (nh.getParam(param_for("ice_servers"), ice_servers_xml)) {
+    if (nh.getParam("ice_servers", ice_servers_xml)) {
         for (size_t i = 0; i != ice_servers_xml.size(); i++) {
             webrtc::PeerConnectionInterface::IceServer ice_server;
             if (_get(nh, ice_servers_xml[0], ice_server)) {
@@ -40,8 +40,8 @@ Config Config::get(ros::NodeHandle& nh) {
 
     // flush_frequency
     instance.flush_frequency = 10 * 60;  // 10 minutes
-    if (nh.hasParam(param_for("flush_frequency"))) {
-        if (!nh.getParam(param_for("flush_frequency"), instance.flush_frequency)) {
+    if (nh.hasParam("flush_frequency")) {
+        if (!nh.getParam("flush_frequency", instance.flush_frequency)) {
             ROS_INFO("'flush_frequency' param type not int");
         }
     }

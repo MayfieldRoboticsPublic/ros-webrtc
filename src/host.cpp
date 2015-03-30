@@ -362,13 +362,13 @@ Host::Service::Service(Host& instance) : _instance(instance) {
 }
 
 void Host::Service::advertise() {
-    _srvs.push_back(_instance._nh.advertiseService(service_for("begin_session"), &Host::Service::begin_session, this));
-    _srvs.push_back(_instance._nh.advertiseService(service_for("end_session"), &Host::Service::end_session, this));
-    _srvs.push_back(_instance._nh.advertiseService(service_for("connect_session"), &Host::Service::connect_session, this));
-    _srvs.push_back(_instance._nh.advertiseService(service_for("add_session_ice_candidate"), &Host::Service::add_session_ice_candidate, this));
-    _srvs.push_back(_instance._nh.advertiseService(service_for("set_session_description"), &Host::Service::set_session_description, this));
-    _srvs.push_back(_instance._nh.advertiseService(service_for("get_session"), &Host::Service::get_session, this));
-    _srvs.push_back(_instance._nh.advertiseService(service_for("get_host"), &Host::Service::get_host, this));
+    _srvs.push_back(_instance._nh.advertiseService("begin_session", &Host::Service::begin_session, this));
+    _srvs.push_back(_instance._nh.advertiseService("end_session", &Host::Service::end_session, this));
+    _srvs.push_back(_instance._nh.advertiseService("connect_session", &Host::Service::connect_session, this));
+    _srvs.push_back(_instance._nh.advertiseService("add_session_ice_candidate", &Host::Service::add_session_ice_candidate, this));
+    _srvs.push_back(_instance._nh.advertiseService("set_session_description", &Host::Service::set_session_description, this));
+    _srvs.push_back(_instance._nh.advertiseService("get_session", &Host::Service::get_session, this));
+    _srvs.push_back(_instance._nh.advertiseService("get_host", &Host::Service::get_host, this));
 }
 
 void Host::Service::shutdown() {
