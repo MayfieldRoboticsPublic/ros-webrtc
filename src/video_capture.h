@@ -49,7 +49,7 @@ private:
 
     ros::CallbackQueue _image_q;
 
-    webrtc::ThreadWrapper* _capture_thd;
+    rtc::scoped_ptr<webrtc::ThreadWrapper> _capture_thd;
 
 // webrtc::videocapturemodule::VideoCaptureImpl
 

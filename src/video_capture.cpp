@@ -4,14 +4,14 @@
 #include <opencv/cv.hpp>
 #include <sensor_msgs/Image.h>
 #include <webrtc/system_wrappers/interface/ref_count.h>
+#include <webrtc/system_wrappers/interface/thread_wrapper.h>
 
 // ROSVideoCaptureModule
 
 ROSVideoCaptureModule::ROSVideoCaptureModule(int32_t id) :
     VideoCaptureImpl(id),
     _capture_cs(webrtc::CriticalSectionWrapper::CreateCriticalSection()),
-    _capturing(false),
-    _capture_thd(NULL) {
+    _capturing(false) {
     _nh.setCallbackQueue(&_image_q);
 }
 
@@ -114,16 +114,16 @@ int32_t ROSVideoCaptureModule::StartCapture(const webrtc::VideoCaptureCapability
 
     webrtc::CriticalSectionScoped cs(_capture_cs);
 
-    //start capture thread;
+    // start capture thread;
     if (_capture_thd == NULL) {
         _capture_thd = webrtc::ThreadWrapper::CreateThread(
-            ROSVideoCaptureModule::_capture_thread, this, webrtc::kHighPriority
+            ROSVideoCaptureModule::_capture_thread, this, "video-capture"
         );
         if (_capture_thd == NULL) {
             return -1;
         }
-        unsigned int id;
-        _capture_thd->Start(id);
+        _capture_thd->Start();
+        _capture_thd->SetPriority(webrtc::kHighPriority);
     }
 
     // done
@@ -136,7 +136,6 @@ int32_t ROSVideoCaptureModule::StartCapture(const webrtc::VideoCaptureCapability
 int32_t ROSVideoCaptureModule::StopCapture() {
     if (_capture_thd != NULL) {
         if (_capture_thd->Stop()) {
-            delete _capture_thd;
             _capture_thd = NULL;
         } else {
             ROS_ERROR("could not stop capture thread, leaking it ...");

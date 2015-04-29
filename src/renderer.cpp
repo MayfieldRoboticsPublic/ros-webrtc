@@ -134,7 +134,7 @@ size_t UnchunkedDataObserver::reap() {
 void UnchunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     ROS_INFO(
         "data message for '%s' - binary=%s, size=%zu",
-        _dc->label().c_str(), buffer.binary ? "true" : "false", buffer.data.length()
+        _dc->label().c_str(), buffer.binary ? "true" : "false", buffer.data.size()
     );
     ros_webrtc::Data msg;
     msg.label = _dc->label();
@@ -142,7 +142,7 @@ void UnchunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     msg.buffer.insert(
         msg.buffer.end(),
         buffer.data.data(),
-        buffer.data.data() + buffer.data.length()
+        buffer.data.data() + buffer.data.size()
     );
     _rpub.publish(msg);
 }
@@ -179,7 +179,7 @@ void ChunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     ROS_INFO_STREAM(
         "data message for '" << _dc->label() << "' - "
         << "binary=" << buffer.binary << ", "
-        << "size=" << buffer.data.length()
+        << "size=" << buffer.data.size()
     );
 
     // deserialize chunk
@@ -187,7 +187,7 @@ void ChunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     Json::Reader reader;
     bool parsingSuccessful = reader.parse(
         buffer.data.data(),
-        buffer.data.data() + buffer.data.length(),
+        buffer.data.data() + buffer.data.size(),
         chunk
     );
     if (!parsingSuccessful) {

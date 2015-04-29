@@ -329,7 +329,7 @@ Session::ChunkedDataTransfer::ChunkedDataTransfer(
     data(data_buffer.data),
     size(size),
     current(0),
-    total(static_cast<size_t>(std::ceil((double)data.length() / (double)size))) {
+    total(static_cast<size_t>(std::ceil((double)data.size() / (double)size))) {
 }
 
 bool Session::ChunkedDataTransfer::is_complete() const {
@@ -345,7 +345,7 @@ size_t Session::ChunkedDataTransfer::operator()(webrtc::DataChannelInterface* pr
     chunk["total"] = static_cast<Json::UInt>(total);
     chunk["data"] = std::string(
         &data.data()[0] + current * size,
-        std::min(size, data.length() - current * size)
+        std::min(size, data.size() - current * size)
     );
     std::string serialized = chunk.toStyledString();
     webrtc::DataBuffer data_buffer(
