@@ -123,7 +123,9 @@ int32_t ROSVideoCaptureModule::StartCapture(const webrtc::VideoCaptureCapability
             return -1;
         }
         _capture_thd->Start();
-        _capture_thd->SetPriority(webrtc::kHighPriority);
+        if (!_capture_thd->SetPriority(webrtc::kHighPriority)) {
+            ROS_ERROR("_capture_thd->SetPriority(webrtc::kHighPriority) == false");
+        }
     }
 
     // done
