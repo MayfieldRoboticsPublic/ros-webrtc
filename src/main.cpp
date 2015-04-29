@@ -2,6 +2,7 @@
 
 #include <ros/ros.h>
 #include <webrtc/base/ssladapter.h>
+#include <webrtc/system_wrappers/interface/trace.h>
 
 #include "config.h"
 #include "host.h"
@@ -28,6 +29,16 @@ int main(int argc, char **argv) {
 
     ROS_INFO("loading config");
     Config config(Config::get(nh));
+
+    if (!config.trace_file.empty()) {
+        ROS_INFO(
+            "setting webrtc trace file to %s w/ mask 0x%04x",
+            config.trace_file.c_str(), config.trace_mask
+        );
+        webrtc::Trace::set_level_filter(config.trace_mask);
+        webrtc::Trace::CreateTrace();
+        webrtc::Trace::SetTraceFile(config.trace_file.c_str());
+    }
 
     ROS_INFO("initializing ssl");
     if (!rtc::InitializeSSL()) {
@@ -67,6 +78,12 @@ int main(int argc, char **argv) {
     ROS_INFO("closing host ...");
     host.close();
     ROS_INFO("closed host");
+
+    if (!config.trace_file.empty()) {
+        ROS_INFO("resetting webrtc trace file");
+        webrtc::Trace::SetTraceFile(NULL);
+        webrtc::Trace::ReturnTrace();
+    }
 
     return 0;
 }

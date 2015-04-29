@@ -3,6 +3,7 @@
 
 #include <ros/ros.h>
 #include <talk/app/webrtc/peerconnectioninterface.h>
+#include <webrtc/common_types.h>
 
 #include "host.h"
 #include "media_constraints.h"
@@ -36,6 +37,9 @@ public:
        ice_servers:
        - uri: stun:stun.services.mozilla.com:3478
        - uri: stun:stun.l.google.com:19302
+       trace:
+        file: /tmp/ros_webrtc.trace
+        filter: all
 
      * \endcode
      */
@@ -56,7 +60,11 @@ public:
 
     IceServers ice_servers; /*! Servers to use for ICE. */
 
-    double flush_frequency; /*! Number of seconds between device/session flushes . */
+    double flush_frequency; /*! Number of seconds between host/session flushes . */
+
+    std::string trace_file; /*! Write WebRTC traces to this file. */
+
+    uint32_t trace_mask; /*! Filter WebRTC traces using this mask. */
 
 private:
 
@@ -67,6 +75,10 @@ private:
     static bool _get(ros::NodeHandle& nh, const std::string& root, MediaConstraints& value);
 
     static bool _get(ros::NodeHandle& nh, XmlRpc::XmlRpcValue& root, webrtc::PeerConnectionInterface::IceServer& value);
+
+    typedef std::map<std::string, webrtc::TraceLevel> TraceLevels;
+
+    static TraceLevels _trace_levels;
 
 };
 
