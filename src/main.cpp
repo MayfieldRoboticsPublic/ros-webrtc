@@ -56,6 +56,7 @@ int main(int argc, char **argv) {
         host_factory.ice_servers.push_back(config.ice_servers[i]);
     }
     host_factory.session_constraints = config.session_constraints;
+    host_factory.queue_sizes = config.queue_sizes;
     Host host = host_factory(nh);
 
     ROS_INFO("opening host ... ");

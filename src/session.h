@@ -18,6 +18,21 @@
 class Device;
 
 /**
+ * \brief Categorized sizes of publisher/subscriber queues.
+ */
+struct QueueSizes {
+
+    QueueSizes(uint32_t size = 0);
+
+    QueueSizes(uint32_t video, uint32_t audio, uint32_t data);
+
+    uint32_t video;
+    uint32_t audio;
+    uint32_t data;
+
+};
+
+/**
  * \brief Represents a peer connection.
  */
 class Session {
@@ -32,6 +47,7 @@ public:
      * \param sdp_constraints Media constraints to apply for this session.
      * \param dcs Data channel settings (e.g. label, reliability, ordering, etc).
      * \param service_names Names of ROS services to use for signaling (e.g. ice-candidates, sdp-offer-answers, etc).
+     * \param default_queue_size Default size of publisher and subscriber queues.
      */
     Session(
         const std::string& id,
@@ -39,7 +55,8 @@ public:
         webrtc::MediaStreamInterface* local_stream,
         const MediaConstraints& sdp_constraints,
         const std::vector<ros_webrtc::DataChannel>& dcs,
-        const std::map<std::string, std::string>& service_names
+        const std::map<std::string, std::string>& service_names,
+        const QueueSizes& queue_sizes
     );
 
     /**
@@ -119,6 +136,8 @@ public:
         std::string recv_topic(const Session& session) const;
 
         ros_webrtc::DataChannel conf;
+
+        uint32_t queue_size;
 
         MediaType protocol;
 
@@ -285,6 +304,8 @@ private:
     ros::Subscriber _s;
 
     std::string _id;
+
+    QueueSizes _queue_sizes;
 
     std::string _peer_id;
 

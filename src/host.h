@@ -80,6 +80,7 @@ struct HostFactory {
 
     std::vector<webrtc::PeerConnectionInterface::IceServer> ice_servers;
 
+    QueueSizes queue_sizes;
 };
 
 /**
@@ -94,7 +95,8 @@ public:
         const std::vector<VideoSource>& video_srcs,
         const AudioSource& audio_src,
         const MediaConstraints& session_constraints,
-        const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers
+        const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers,
+        const QueueSizes& queue_sizes
     );
 
     Host(const Host& other);
@@ -245,6 +247,8 @@ private:
     MediaConstraints _session_constraints;
 
     std::vector<webrtc::PeerConnectionInterface::IceServer> _ice_servers;
+
+    QueueSizes _queue_sizes;
 
     rtc::scoped_ptr<rtc::Thread> _signaling_thd;
 
