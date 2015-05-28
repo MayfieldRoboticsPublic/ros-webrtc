@@ -137,8 +137,6 @@ public:
 
         ros_webrtc::DataChannel conf;
 
-        uint32_t queue_size;
-
         MediaType protocol;
 
         rtc::scoped_refptr<webrtc::DataChannelInterface> provider;

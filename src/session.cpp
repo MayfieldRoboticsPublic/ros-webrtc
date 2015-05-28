@@ -85,7 +85,7 @@ bool Session::create_offer() {
 
         std::string send_topic = (*i).send_topic(*this);
         (*i).subscriber = _nh.subscribe<ros_webrtc::Data>(
-            send_topic, (*i).queue_size, &DataChannel::send, &(*i)
+            send_topic, _queue_sizes.data, &DataChannel::send, &(*i)
         );
 
         std::string recv_topic = (*i).recv_topic(*this);
@@ -468,7 +468,7 @@ void Session::PeerConnectionObserver::OnDataChannel(webrtc::DataChannelInterface
 
         std::string send_topic = (*i).send_topic(instance);
         (*i).subscriber = instance._nh.subscribe<ros_webrtc::Data>(
-            send_topic, (*i).queue_size, &DataChannel::send, &(*i)
+            send_topic, instance._queue_sizes.data, &DataChannel::send, &(*i)
         );
 
         std::string recv_topic = (*i).recv_topic(instance);
