@@ -10,10 +10,11 @@
 AudioSink::AudioSink(
     ros::NodeHandle& nh,
     const std::string& topic,
+    uint32_t queue_size,
     webrtc::AudioTrackInterface* audio_track
     ) :
     _audio_track(audio_track),
-    _rpub(nh.advertise<ros_webrtc::Audio>(topic, 1000)) {
+    _rpub(nh.advertise<ros_webrtc::Audio>(topic, queue_size)) {
     ROS_DEBUG_STREAM("registering audio renderer");
     _audio_track->AddSink(this);
 }
@@ -50,10 +51,11 @@ void AudioSink::OnData(
 VideoRenderer::VideoRenderer(
     ros::NodeHandle nh,
     const std::string& topic,
+    uint32_t queue_size,
     webrtc::VideoTrackInterface* video_track
     ) :
     _video_track(video_track),
-    _rpub(nh.advertise<sensor_msgs::Image>(topic, 1000)) {
+    _rpub(nh.advertise<sensor_msgs::Image>(topic, queue_size)) {
     ROS_DEBUG_STREAM("registering video renderer");
     _video_track->AddRenderer(this);
     _msg.encoding = sensor_msgs::image_encodings::BGR8;
@@ -95,10 +97,11 @@ void VideoRenderer::RenderFrame(const cricket::VideoFrame* frame) {
 DataObserver::DataObserver(
     ros::NodeHandle& nh,
     const std::string& topic,
+    uint32_t queue_size,
     webrtc::DataChannelInterface* data_channel
     ) :
     _dc(data_channel),
-    _rpub(nh.advertise<ros_webrtc::Data>(topic, 1000)) {
+    _rpub(nh.advertise<ros_webrtc::Data>(topic, queue_size)) {
     ROS_INFO(
         "registering data renderer for '%s' to '%s'",
         _dc->label().c_str(), _rpub.getTopic().c_str()
@@ -123,8 +126,9 @@ void DataObserver::OnStateChange() {
 UnchunkedDataObserver::UnchunkedDataObserver(
     ros::NodeHandle& nh,
     const std::string& topic,
+    uint32_t queue_size,
     webrtc::DataChannelInterface* data_channel
-    ) : DataObserver(nh, topic, data_channel) {
+    ) : DataObserver(nh, topic, queue_size, data_channel) {
 }
 
 size_t UnchunkedDataObserver::reap() {
@@ -152,8 +156,9 @@ void UnchunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
 ChunkedDataObserver::ChunkedDataObserver(
     ros::NodeHandle& nh,
     const std::string& topic,
+    uint32_t queue_size,
     webrtc::DataChannelInterface* data_channel
-    ) : DataObserver(nh, topic, data_channel) {
+    ) : DataObserver(nh, topic, queue_size, data_channel) {
 }
 
 size_t ChunkedDataObserver::reap() {

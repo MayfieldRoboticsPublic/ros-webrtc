@@ -47,6 +47,20 @@ AudioSource::AudioSource(
     publish (publish_) {
 }
 
+// QueueSizes
+
+QueueSizes::QueueSizes(uint32_t size) :
+    audio(size),
+    video(size),
+    data(size) {
+}
+
+QueueSizes::QueueSizes(uint32_t video, uint32_t audio, uint32_t data) :
+    audio(audio),
+    video(video),
+    data(data) {
+}
+
 // HostFactory
 
 Host HostFactory::operator()(ros::NodeHandle &nh) {
@@ -55,7 +69,8 @@ Host HostFactory::operator()(ros::NodeHandle &nh) {
         video_srcs,
         audio_src,
         session_constraints,
-        ice_servers
+        ice_servers,
+        queue_sizes
     );
 }
 
@@ -66,13 +81,15 @@ Host::Host(
     const std::vector<VideoSource>& video_srcs,
     const AudioSource& audio_src,
     const MediaConstraints& session_constraints,
-    const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers
+    const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers,
+    const QueueSizes& queue_sizes
     ) :
     _nh(nh),
     _video_srcs(video_srcs),
     _audio_src(audio_src),
     _session_constraints(session_constraints),
     _ice_servers(ice_servers),
+    _queue_sizes(queue_sizes),
     _srv(*this) {
 }
 
@@ -82,6 +99,7 @@ Host::Host(const Host& other) :
     _audio_src(other._audio_src),
     _session_constraints(other._session_constraints),
     _ice_servers(other._ice_servers),
+    _queue_sizes(other._queue_sizes),
     _srv(*this) {
 }
 
@@ -133,7 +151,8 @@ SessionPtr Host::begin_session(
         _local_stream,
         sdp_constraints,
         data_channels,
-        service_names
+        service_names,
+        _queue_sizes
     ));
     Session::ObserverPtr pc_observer(new SessionObserver(*this, s));
     if (!s->begin(
@@ -259,6 +278,7 @@ bool Host::_open_local_stream() {
         _audio_sink.reset(new AudioSink(
             _nh,
             topic_for({"local", "audio_" + audio_track->id()}),
+            _queue_sizes.audio,
             audio_track
         ));
     }
@@ -317,7 +337,10 @@ bool Host::_open_local_stream() {
         video_capturer.release();
         if (video_src.publish) {
             VideoRendererPtr video_renderer(new VideoRenderer(
-                _nh, topic_for({"local", "video_" + video_track->id()}), video_track
+                _nh,
+                topic_for({"local", "video_" + video_track->id()}),
+                _queue_sizes.video,
+                video_track
             ));
             _video_renderers.push_back(video_renderer);
         }

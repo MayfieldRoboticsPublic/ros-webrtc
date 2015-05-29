@@ -15,7 +15,8 @@ Session::Session(
     webrtc::MediaStreamInterface* local_stream,
     const MediaConstraints& sdp_constraints,
     const std::vector<ros_webrtc::DataChannel>& dcs,
-    const std::map<std::string, std::string>& service_names
+    const std::map<std::string, std::string>& service_names,
+    const QueueSizes& queue_sizes
     ) :
     _id(id),
     _peer_id(peer_id),
@@ -26,7 +27,8 @@ Session::Session(
     _ssdo(new Session::SetSessionDescriptionObserver(*this)),
     _is_offerer(false),
     _queue_remote_ice_candidates(true),
-    _srv_cli(*this, service_names) {
+    _srv_cli(*this, service_names),
+    _queue_sizes(queue_sizes) {
     for (size_t i = 0; i < dcs.size(); i++) {
         _dcs.push_back(DataChannel(dcs[i]));
     }
@@ -83,18 +85,24 @@ bool Session::create_offer() {
 
         std::string send_topic = (*i).send_topic(*this);
         (*i).subscriber = _nh.subscribe<ros_webrtc::Data>(
-            send_topic, 1, &DataChannel::send, &(*i)
+            send_topic, _queue_sizes.data, &DataChannel::send, &(*i)
         );
 
         std::string recv_topic = (*i).recv_topic(*this);
         boost::shared_ptr<DataObserver> data_observer;
         if ((*i).is_chunked()) {
             data_observer.reset(new ChunkedDataObserver(
-                _nh, recv_topic, (*i).provider.get()
+                _nh,
+                recv_topic,
+                _queue_sizes.data,
+                (*i).provider.get()
             ));
         } else {
             data_observer.reset(new UnchunkedDataObserver(
-                _nh, recv_topic, (*i).provider.get()
+                _nh,
+                recv_topic,
+                _queue_sizes.data,
+                (*i).provider.get()
             ));
         }
         (*i).observers.push_back(data_observer);
@@ -385,9 +393,12 @@ void Session::PeerConnectionObserver::OnAddStream(webrtc::MediaStreamInterface* 
             "peer_" + instance._peer_id,
             "audio_" + (*i)->id()
         });
-        AudioSinkPtr audio_sink(
-            new AudioSink(instance._nh, topic, (*i).get())
-        );
+        AudioSinkPtr audio_sink(new AudioSink(
+            instance._nh,
+            topic,
+            instance._queue_sizes.audio,
+            (*i).get()
+        ));
         instance._audio_sinks.push_back(audio_sink);
     }
 
@@ -401,9 +412,12 @@ void Session::PeerConnectionObserver::OnAddStream(webrtc::MediaStreamInterface* 
             "peer_" + instance._peer_id,
             "video_" + (*i)->id()
         });
-        VideoRendererPtr video_renderer(
-            new VideoRenderer(instance._nh, topic, (*i).get())
-        );
+        VideoRendererPtr video_renderer(new VideoRenderer(
+            instance._nh,
+            topic,
+            instance._queue_sizes.video,
+            (*i).get()
+        ));
         instance._video_renderers.push_back(video_renderer);
     }
 }
@@ -454,18 +468,24 @@ void Session::PeerConnectionObserver::OnDataChannel(webrtc::DataChannelInterface
 
         std::string send_topic = (*i).send_topic(instance);
         (*i).subscriber = instance._nh.subscribe<ros_webrtc::Data>(
-            send_topic, 1, &DataChannel::send, &(*i)
+            send_topic, instance._queue_sizes.data, &DataChannel::send, &(*i)
         );
 
         std::string recv_topic = (*i).recv_topic(instance);
         boost::shared_ptr<DataObserver> data_observer;
         if ((*i).is_chunked()) {
             data_observer.reset(new ChunkedDataObserver(
-                instance._nh, recv_topic, data_channel
+                instance._nh,
+                recv_topic,
+                instance._queue_sizes.data,
+                data_channel
             ));
         } else {
             data_observer.reset(new UnchunkedDataObserver(
-                instance._nh, recv_topic, data_channel
+                instance._nh,
+                recv_topic,
+                instance._queue_sizes.data,
+                data_channel
             ));
         }
         (*i).observers.push_back(data_observer);

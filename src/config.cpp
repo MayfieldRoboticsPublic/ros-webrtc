@@ -96,6 +96,12 @@ Config Config::get(ros::NodeHandle& nh) {
         }
     }
 
+    // queue_sizes
+    instance.queue_sizes = QueueSizes(1000);
+    if (nh.hasParam("queue_sizes")) {
+        _get(nh, "queue_sizes", instance.queue_sizes);
+    }
+
     return instance;
 }
 
@@ -168,6 +174,17 @@ bool Config::_get(ros::NodeHandle& nh, XmlRpc::XmlRpcValue& root, webrtc::PeerCo
         value.password = std::string(root["password"]);
     else
         value.password.clear();
+    return true;
+}
+
+bool Config::_get(ros::NodeHandle& nh, const std::string& root, QueueSizes& value) {
+    int size;
+    if (nh.getParam(ros::names::append(root, "audio"), size))
+        value.audio = size;
+    if (nh.getParam(ros::names::append(root, "video"), size))
+        value.video = size;
+    if (nh.getParam(ros::names::append(root, "data"), size))
+        value.data = size;
     return true;
 }
 

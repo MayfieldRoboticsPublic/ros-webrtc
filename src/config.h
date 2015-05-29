@@ -40,6 +40,10 @@ public:
        trace:
         file: /tmp/ros_webrtc.trace
         filter: all
+       queue_sizes:
+        audio: 1000
+        video: 1000
+        data: 1000
 
      * \endcode
      */
@@ -60,11 +64,13 @@ public:
 
     IceServers ice_servers; /*! Servers to use for ICE. */
 
-    double flush_frequency; /*! Number of seconds between host/session flushes . */
+    double flush_frequency; /*! Number of seconds between host/session flushes. */
 
     std::string trace_file; /*! Write WebRTC traces to this file. */
 
     uint32_t trace_mask; /*! Filter WebRTC traces using this mask. */
+
+    QueueSizes queue_sizes; /*! Sizes of audio, video and data publisher/subscriber queues. */
 
 private:
 
@@ -75,6 +81,8 @@ private:
     static bool _get(ros::NodeHandle& nh, const std::string& root, MediaConstraints& value);
 
     static bool _get(ros::NodeHandle& nh, XmlRpc::XmlRpcValue& root, webrtc::PeerConnectionInterface::IceServer& value);
+
+    static bool _get(ros::NodeHandle& nh, const std::string& root, QueueSizes& value);
 
     typedef std::map<std::string, webrtc::TraceLevel> TraceLevels;
 

@@ -18,6 +18,7 @@ public:
     AudioSink(
         ros::NodeHandle& nh,
         const std::string& topic,
+        uint32_t queue_size,
         webrtc::AudioTrackInterface* audio_track
     );
 
@@ -55,6 +56,7 @@ public:
     VideoRenderer(
         ros::NodeHandle nh,
         const std::string& topic,
+        uint32_t queue_size,
         webrtc::VideoTrackInterface* video_track
     );
 
@@ -89,6 +91,7 @@ public:
     DataObserver(
         ros::NodeHandle& nh,
         const std::string& topic,
+        uint32_t queue_size,
         webrtc::DataChannelInterface* data_channel
     );
 
@@ -117,6 +120,7 @@ public:
     UnchunkedDataObserver(
         ros::NodeHandle& nh,
         const std::string& topic,
+        uint32_t queue_size,
         webrtc::DataChannelInterface* data_channel
     );
 
@@ -141,6 +145,7 @@ public:
     ChunkedDataObserver(
         ros::NodeHandle& nh,
         const std::string& topic,
+        uint32_t queue_size,
         webrtc::DataChannelInterface* data_channel
     );
 
