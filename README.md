@@ -110,3 +110,7 @@ $ lcov --path . --directory . --capture --output-file coverage.info
 $ lcov --remove coverage.info 'devel/*' 'test/*' '/usr/*' '/opt/*' --output-file coverage.info
 $ lcov --list coverage.info
 ```
+
+## maintainers
+
+* [aisch](https://github.com/aisch)
