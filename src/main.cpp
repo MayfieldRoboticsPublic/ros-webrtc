@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     ROS_INFO("initializing ros");
     ros::init(argc, argv, "webrtc", ros::init_options::AnonymousName);
 
-    ros::NodeHandle nh("~");
+    ros::NodeHandle nh;
 
     ROS_INFO("loading config");
     Config config(Config::get(nh));
