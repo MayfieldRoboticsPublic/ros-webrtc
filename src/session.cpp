@@ -1,5 +1,7 @@
 #include "session.h"
 
+#include <boost/function.hpp>
+#include <boost/bind.hpp>
 #include <json/json.h>
 #include <ros/ros.h>
 #include <talk/app/webrtc/jsepicecandidate.h>
@@ -12,15 +14,13 @@
 Session::Session(
     const std::string& id,
     const std::string& peer_id,
-    webrtc::MediaStreamInterface* local_stream,
-    const MediaConstraints& sdp_constraints,
     const std::vector<ros_webrtc::DataChannel>& dcs,
+    const MediaConstraints& sdp_constraints,
     const std::map<std::string, std::string>& service_names,
     const QueueSizes& queue_sizes
     ) :
     _id(id),
     _peer_id(peer_id),
-    _local_stream(local_stream),
     _sdp_constraints(sdp_constraints),
     _pco(*this),
     _csdo(new Session::CreateSessionDescriptionObserver(*this)),
@@ -28,7 +28,13 @@ Session::Session(
     _is_offerer(false),
     _queue_remote_ice_candidates(true),
     _srv_cli(*this, service_names),
-    _queue_sizes(queue_sizes) {
+    _queue_sizes(queue_sizes),
+    _bond(
+        "bond",
+        id,
+        boost::function<void (void)>(boost::bind(&Session::_on_bond_broken, this)),
+        boost::function<void (void)>(boost::bind(&Session::_on_bond_formed, this))
+    ) {
     for (size_t i = 0; i < dcs.size(); i++) {
         _dcs.push_back(DataChannel(dcs[i]));
     }
@@ -46,21 +52,29 @@ bool Session::begin(
     webrtc::PeerConnectionFactoryInterface* pc_factory,
     const webrtc::MediaConstraintsInterface* pc_constraints,
     const webrtc::PeerConnectionInterface::IceServers& ice_servers,
+    const std::vector<AudioSource> &audio_srcs,
+    const std::vector<VideoSource> &video_srcs,
     Session::ObserverPtr observer
     ) {
     _observer = observer;
+    if (!_open_local_stream(pc_factory, audio_srcs, video_srcs)) {
+        end();
+        return false;
+    }
     if (!_open_peer_connection(pc_factory, pc_constraints, ice_servers)) {
         end();
         return false;
     }
-
+    _bond.start();
     return true;
 }
 
 void Session::end() {
     _close_peer_connection();
+    _close_local_stream();
     _observer.reset();
     _srv_cli.shutdown();
+    _bond.breakBond();
 }
 
 webrtc::PeerConnectionInterface* Session::peer_connection() {
@@ -193,13 +207,7 @@ void Session::_close_peer_connection() {
     srv.request.peer_id = _peer_id;
     _srv_cli.end_session.call(srv);
 
-    while (!_audio_sinks.empty()) {
-        _audio_sinks.pop_front();
-    }
-
-    while (!_video_renderers.empty()) {
-        _video_renderers.pop_front();
-    }
+    _close_local_stream();
 
     for (DataChannels::iterator i = _dcs.begin(); i != _dcs.end(); i++) {
         (*i).subscriber.shutdown();
@@ -213,6 +221,118 @@ void Session::_close_peer_connection() {
         _pc->Close();
         _pc = NULL;
     }
+}
+
+bool Session::_open_local_stream(
+        webrtc::PeerConnectionFactoryInterface* pc_factory,
+        const std::vector<Session::AudioSource> &audio_srcs,
+        const std::vector<Session::VideoSource> &video_srcs
+    ) {
+    rtc::scoped_refptr<webrtc::MediaStreamInterface> local_stream;
+
+    // stream
+    std::stringstream ss;
+    ss << "s" << 1;
+    std::string stream_label = ss.str();
+    ss.str("");
+    ss.clear();
+    local_stream = pc_factory->CreateLocalMediaStream(stream_label);
+
+    // audio tracks
+    for (size_t i = 0; i != audio_srcs.size(); i++) {
+        const auto& audio_src = audio_srcs[i];
+
+        // track
+        std::string audio_label = audio_src.label;
+        if (audio_label.empty()) {
+            ss << "a" << i + 1;
+            audio_label = ss.str();
+            ss.str("");
+            ss.clear();
+        }
+        rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
+            pc_factory->CreateAudioTrack(audio_label, audio_src.interface)
+        );
+        if(audio_track.get() == NULL) {
+            ROS_ERROR(
+                "cannot create audio track '%s' for source '%s'",
+                audio_label.c_str(), audio_src.label.c_str()
+            );
+            return false;
+        }
+
+        // sink
+        if (audio_src.publish) {
+            AudioSinkPtr audio_sink(new AudioSink(
+                _nh,
+                topic_for({"local", "audio_" + audio_track->id()}),
+                _queue_sizes.audio,
+                audio_track
+            ));
+            _audio_sinks.push_back(audio_sink);
+        }
+
+        local_stream->AddTrack(audio_track);
+    }
+
+    // video tracks
+    for (size_t i = 0; i != video_srcs.size(); i++) {
+        const auto& video_src = video_srcs[i];
+
+        // track
+        std::string video_label = video_src.label;
+        if (video_label.empty()) {
+            ss << "v" << i + 1;
+            video_label = ss.str();
+            ss.str("");
+            ss.clear();
+        }
+        rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
+            pc_factory->CreateVideoTrack(video_label, video_src.interface)
+        );
+        if(video_track.get() == NULL) {
+            ROS_ERROR(
+                "cannot create video track '%s' for source '%s'",
+                video_label.c_str(), video_src.label.c_str()
+            );
+            return false;
+        }
+
+        // renderer
+        if (video_src.publish) {
+            VideoRendererPtr video_renderer(new VideoRenderer(
+                _nh,
+                topic_for({"local", "video_" + video_track->id()}),
+                _queue_sizes.video,
+                video_track
+            ));
+            _video_renderers.push_back(video_renderer);
+        }
+
+        local_stream->AddTrack(video_track);
+    }
+
+    _local_stream = local_stream;
+
+    return true;
+}
+
+void Session::_close_local_stream() {
+    while (!_audio_sinks.empty()) {
+        _audio_sinks.pop_front();
+    }
+    while (!_video_renderers.empty()) {
+        _video_renderers.pop_front();
+    }
+    _local_stream = NULL;
+}
+
+void Session::_on_bond_formed() {
+    ROS_INFO("session '%s' bond formed", _id.c_str());
+}
+
+void Session::_on_bond_broken() {
+    ROS_INFO("session '%s' bond broken", _id.c_str());
 }
 
 void Session::_on_local_description(webrtc::SessionDescriptionInterface* desc) {
@@ -241,6 +361,28 @@ void Session::_drain_remote_ice_candidates() {
         _pc->AddIceCandidate(ice_candidate.get());
     }
     _queue_remote_ice_candidates = false;
+}
+
+// Session::VideoSource
+
+Session::VideoSource::VideoSource(
+    const std::string& label,
+    webrtc::VideoSourceInterface *interface,
+    bool publish) :
+        label(label),
+        interface(interface),
+        publish(publish) {
+}
+
+// Session::AudioSource
+
+Session::AudioSource::AudioSource(
+    const std::string& label,
+    webrtc::AudioSourceInterface *interface,
+    bool publish) :
+        label(label),
+        interface(interface),
+        publish(publish){
 }
 
 // Session::DataChannel

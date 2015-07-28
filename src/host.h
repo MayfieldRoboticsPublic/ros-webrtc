@@ -15,8 +15,9 @@
 #include "media_constraints.h"
 #include "session.h"
 
-class Host;
-
+/**
+ * \brief Description of a local video source.
+ */
 struct VideoSource {
 
     enum Type {
@@ -45,8 +46,13 @@ struct VideoSource {
 
     bool publish;
 
+    rtc::scoped_refptr<webrtc::VideoSourceInterface> interface;
+
 };
 
+/**
+ * \brief Description of a local audio source.
+ */
 struct AudioSource {
 
     AudioSource();
@@ -63,24 +69,8 @@ struct AudioSource {
 
     bool publish;
 
-};
+    rtc::scoped_refptr<webrtc::AudioSourceInterface> interface;
 
-/**
- * \brief Helper used to create a Host.
- */
-struct HostFactory {
-
-    Host operator()(ros::NodeHandle &nh);
-
-    std::vector<VideoSource> video_srcs;
-
-    AudioSource audio_src;
-
-    MediaConstraints session_constraints;
-
-    std::vector<webrtc::PeerConnectionInterface::IceServer> ice_servers;
-
-    QueueSizes queue_sizes;
 };
 
 /**
@@ -103,8 +93,6 @@ public:
 
     ~Host();
 
-    const std::string& id() const;
-
     bool open();
 
     bool is_open() const;
@@ -115,6 +103,8 @@ public:
         const std::string& id,
         const std::string& peer_id,
         const MediaConstraints& sdp_constraints,
+        const std::vector<std::string>& audio_sources,
+        const std::vector<std::string>& video_sources,
         const std::vector<ros_webrtc::DataChannel>& data_channels,
         const std::map<std::string, std::string>& service_names
     );
@@ -230,9 +220,9 @@ private:
 
     bool _create_pc_factory();
 
-    bool _open_local_stream();
+    bool _open_local_sources();
 
-    void _close_local_stream();
+    void _close_local_sources();
 
     SessionPtr _find_session(const SessionKey& key);
 
@@ -240,9 +230,9 @@ private:
 
     ros::NodeHandle _nh;
 
-    std::vector<VideoSource> _video_srcs;
-
     AudioSource _audio_src;
+
+    std::vector<VideoSource> _video_srcs;
 
     MediaConstraints _session_constraints;
 
@@ -256,16 +246,6 @@ private:
 
     rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> _pc_factory;
 
-    rtc::scoped_refptr<webrtc::MediaStreamInterface> _local_stream;
-
-    std::string _audio_label;
-
-    AudioSinkPtr _audio_sink;
-
-    std::list<VideoRendererPtr> _video_renderers;
-
-    ros::V_Subscriber _rsubs;
-
     Sessions _sessions;
 
     Service _srv;
@@ -273,5 +253,23 @@ private:
 };
 
 typedef boost::shared_ptr<Host> HostPtr;
+
+/**
+ * \brief Helper used to create a Host.
+ */
+struct HostFactory {
+
+    Host operator()(ros::NodeHandle &nh);
+
+    std::vector<VideoSource> video_srcs;
+
+    AudioSource audio_src;
+
+    MediaConstraints session_constraints;
+
+    std::vector<webrtc::PeerConnectionInterface::IceServer> ice_servers;
+
+    QueueSizes queue_sizes;
+};
 
 #endif  /* WEBRTC_HOST_H_ */
