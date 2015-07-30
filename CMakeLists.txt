@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   genmsg
   cv_bridge
   image_transport
+  bondcpp
 )
 
 ## System dependencies are found with CMake's conventions
@@ -65,6 +66,7 @@ add_message_files(
   Data.msg
   DataChannel.msg
   MediaConstraints.msg
+  Source.msg
   Track.msg
   SessionKey.msg
 )

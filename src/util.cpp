@@ -16,7 +16,10 @@ std::string normalize_name(const std::string& name) {
     }
     i++;
     for(; i != name.size(); i++) {
-        if (isalnum(name[i]) || name[i] == '_' || name[i] == '/') {
+        if (isalnum(name[i]) ||
+            name[i] == '_' ||
+            name[i] == '/' ||
+            name[i] == '~') {
             normalized += name[i];
         }
     }
@@ -25,8 +28,13 @@ std::string normalize_name(const std::string& name) {
 
 std::string topic_for(std::initializer_list<std::string> parts) {
     std::string path = "";
-    for(auto part : parts) {
-        path = ros::names::append(path, normalize_name(part));
+    if (parts.size() != 0) {
+        auto i = parts.begin();
+        path = normalize_name(*i);
+        i += 1;
+        for(; i != parts.end(); i += 1) {
+            path = ros::names::append(path, normalize_name(*i));
+        }
     }
     return path;
 }

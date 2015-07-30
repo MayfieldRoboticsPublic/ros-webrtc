@@ -61,19 +61,6 @@ QueueSizes::QueueSizes(uint32_t video, uint32_t audio, uint32_t data) :
     data(data) {
 }
 
-// HostFactory
-
-Host HostFactory::operator()(ros::NodeHandle &nh) {
-    return Host(
-        nh,
-        video_srcs,
-        audio_src,
-        session_constraints,
-        ice_servers,
-        queue_sizes
-    );
-}
-
 // Host
 
 Host::Host(
@@ -112,7 +99,7 @@ bool Host::open() {
         close();
         return false;
     }
-    if (!_open_local_stream()) {
+    if (!_open_local_sources()) {
         close();
         return false;
     }
@@ -126,7 +113,7 @@ bool Host::is_open() const {
 
 void Host::close() {
     _srv.shutdown();
-    _close_local_stream();
+    _close_local_sources();
     _pc_factory.release();
     _worker_thd.reset();
     _signaling_thd.reset();
@@ -136,32 +123,72 @@ SessionPtr Host::begin_session(
     const std::string& id,
     const std::string& peer_id,
     const MediaConstraints& sdp_constraints,
+    const std::vector<std::string>& audio_sources,
+    const std::vector<std::string>& video_sources,
     const std::vector<ros_webrtc::DataChannel>& data_channels,
     const std::map<std::string, std::string>& service_names
     ) {
     ROS_INFO("creating session id='%s', peer='%s'", id.c_str(), peer_id.c_str());
+
+    // key
     SessionKey key = {id, peer_id};
     if (_sessions.find(key) != _sessions.end()) {
         ROS_ERROR("session w/ id='%s', peer='%s' already exists", id.c_str(), peer_id.c_str());
         return SessionPtr();
     }
+
+    // audio sources
+    std::vector<Session::AudioSource> audio_srcs;
+    for (auto i = audio_sources.begin(); i != audio_sources.end(); i += 1) {
+        if (*(i) == _audio_src.label || *(i) == "*") {
+            audio_srcs.push_back(Session::AudioSource(
+                _audio_src.label,
+                _audio_src.interface,
+                _audio_src.publish
+            ));
+            break;
+        }
+    }
+
+    // video sources
+    std::vector<Session::VideoSource> video_srcs;
+    for (auto i = _video_srcs.begin(); i != _video_srcs.end(); i++) {
+        auto &video_src = (*i);
+        for (auto j = video_sources.begin(); j != video_sources.end(); j += 1) {
+            if (*(j) == video_src.label || *(j) == "*") {
+                video_srcs.push_back(Session::VideoSource(
+                    video_src.label,
+                    video_src.interface,
+                    video_src.publish
+                ));
+                break;
+            }
+        }
+    }
+
+    // create it
     SessionPtr s(new Session(
         id,
         peer_id,
-        _local_stream,
-        sdp_constraints,
         data_channels,
+        sdp_constraints,
         service_names,
         _queue_sizes
     ));
+
+    // and start it
     Session::ObserverPtr pc_observer(new SessionObserver(*this, s));
     if (!s->begin(
         _pc_factory,
         &_session_constraints,
         _ice_servers,
+        audio_srcs,
+        video_srcs,
         pc_observer
         ))
         return SessionPtr();
+
+    // register it w/ key
     _sessions[key] = s;
     return s;
 }
@@ -222,15 +249,7 @@ bool Host::_create_pc_factory() {
     return true;
 }
 
-bool Host::_open_local_stream() {
-    // stream
-    std::stringstream ss;
-    ss << "s" << 1;
-    std::string stream_label = ss.str();
-    ss.str("");
-    ss.clear();
-    _local_stream = _pc_factory->CreateLocalMediaStream(stream_label);
-
+bool Host::_open_local_sources() {
     ROS_DEBUG_STREAM("creating system device manager");
     rtc::scoped_ptr<cricket::DeviceManagerInterface> sys_dev_mgr(
         cricket::DeviceManagerFactory::Create()
@@ -256,37 +275,16 @@ bool Host::_open_local_stream() {
         return false;
     }
 
-    // audio track
-    std::string audio_label = _audio_src.label;
-    if (audio_label.empty()) {
-        ss << "a" << 1;
-        audio_label = ss.str();
-        ss.str("");
-        ss.clear();
-    }
-    rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
-        _pc_factory->CreateAudioTrack(
-           audio_label,
-           _pc_factory->CreateAudioSource(&_audio_src.constraints)
-        )
-    );
-    if(audio_track.get() == NULL) {
-        ROS_ERROR("cannot create track '%s'", audio_label.c_str());
+    // audio source
+    _audio_src.interface = _pc_factory->CreateAudioSource(&_audio_src.constraints);
+    if(_audio_src.interface.get() == NULL) {
+        ROS_ERROR("cannot create source '%s' for audio device", _audio_src.label.c_str());
         return false;
     }
-    if (_audio_src.publish) {
-        _audio_sink.reset(new AudioSink(
-            _nh,
-            topic_for({"local", "audio_" + audio_track->id()}),
-            _queue_sizes.audio,
-            audio_track
-        ));
-    }
-    _local_stream->AddTrack(audio_track);
 
-    // video tracks
+    // video sources
     for (size_t i = 0; i != _video_srcs.size(); i++) {
-        const VideoSource& video_src = _video_srcs[i];
+        VideoSource& video_src = _video_srcs[i];
 
         // device manager
         cricket::DeviceManagerInterface *dev_mgr = NULL;
@@ -314,48 +312,26 @@ bool Host::_open_local_stream() {
             return false;
         }
 
-        // track
-        std::string video_label = video_src.label;
-        if (video_label.empty()) {
-            ss << "v" << i + 1;
-            video_label = ss.str();
-            ss.str("");
-            ss.clear();
-        }
-        rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
-            _pc_factory->CreateVideoTrack(
-                video_label, _pc_factory->CreateVideoSource(video_capturer.get(), &video_src.constraints)
-            )
-        );
-        if(video_track.get() == NULL) {
+        // source
+        video_src.interface = _pc_factory->CreateVideoSource(video_capturer.get(), &video_src.constraints);
+        if(video_src.interface.get() == NULL) {
             ROS_ERROR(
-                "cannot create track '%s' for video capture device '%s'",
-                video_label.c_str(), video_src.name.c_str()
+                "cannot create source '%s' for video capture device '%s'",
+                video_src.label.c_str(), video_src.name.c_str()
             );
             return false;
         }
         video_capturer.release();
-        if (video_src.publish) {
-            VideoRendererPtr video_renderer(new VideoRenderer(
-                _nh,
-                topic_for({"local", "video_" + video_track->id()}),
-                _queue_sizes.video,
-                video_track
-            ));
-            _video_renderers.push_back(video_renderer);
-        }
-        _local_stream->AddTrack(video_track);
     }
 
     return true;
 }
 
-void Host::_close_local_stream() {
-    _audio_sink.reset();
-    while (!_video_renderers.empty()) {
-        _video_renderers.pop_front();
+void Host::_close_local_sources() {
+    _audio_src.interface = NULL;
+    for (auto i = _video_srcs.begin(); i != _video_srcs.end(); i++) {
+        (*i).interface = NULL;
     }
-    _local_stream = NULL;
 }
 
 SessionPtr Host::_find_session(const SessionKey& key) {
@@ -400,6 +376,7 @@ void Host::Service::shutdown() {
 
 bool Host::Service::begin_session(ros::ServiceEvent<ros_webrtc::BeginSession::Request, ros_webrtc::BeginSession::Response>& event) {
     const auto &req = event.getRequest();
+
     MediaConstraints sdp_constraints;
     for(size_t i = 0; i != req.sdp_constraints.mandatory.size(); i++) {
         sdp_constraints.mandatory().push_back(MediaConstraints::Constraint(
@@ -413,12 +390,20 @@ bool Host::Service::begin_session(ros::ServiceEvent<ros_webrtc::BeginSession::Re
             req.sdp_constraints.optional[i].value
         ));
     }
+
     std::map<std::string, std::string> service_names;
     service_names["end_session"] = req.end_session;
     service_names["add_session_ice_candidate"] = req.add_session_ice_candidate;
     service_names["set_session_description"] = req.set_session_description;
+
     SessionPtr session(_instance.begin_session(
-        req.session_id, req.peer_id, sdp_constraints, req.data_channels, service_names
+        req.session_id,
+        req.peer_id,
+        sdp_constraints,
+        req.audio_sources,
+        req.video_sources,
+        req.data_channels,
+        service_names
     ));
     return session != NULL;
 }
@@ -503,6 +488,8 @@ bool Host::Service::get_session(ros::ServiceEvent<ros_webrtc::GetSession::Reques
 bool Host::Service::get_host(ros::ServiceEvent<ros_webrtc::GetHost::Request, ros_webrtc::GetHost::Response>& event) {
     const auto &req = event.getRequest();
     auto &resp = event.getResponse();
+
+    // session constraints
     for (auto i = _instance._session_constraints.mandatory().begin();
          i != _instance._session_constraints.mandatory().end();
          i++) {
@@ -519,62 +506,68 @@ bool Host::Service::get_host(ros::ServiceEvent<ros_webrtc::GetHost::Request, ros
         constraint.value = (*i).value;
         resp.sdp_constraints.optional.push_back(constraint);
     }
-    webrtc::AudioTrackVector audio_tracks = _instance._local_stream->GetAudioTracks();
-    for (auto i = audio_tracks.begin(); i != audio_tracks.end(); i++) {
-        ros_webrtc::Track track;
-        track.kind = (*i)->kind();
-        track.id = (*i)->id();
-        switch ((*i)->state()) {
+
+    // audio sources
+    const auto &audio_src = _instance._audio_src;
+    ros_webrtc::Source src;
+    src.kind = "audio";
+    src.label = audio_src.label;
+    switch (audio_src.interface->state()) {
+        case webrtc::MediaStreamTrackInterface::kInitializing:
+            src.state = "initializing";
+            break;
+        case webrtc::MediaStreamTrackInterface::kLive:
+            src.state = "live";
+            break;
+        case webrtc::MediaStreamTrackInterface::kEnded:
+            src.state = "ended";
+            break;
+        case webrtc::MediaStreamTrackInterface::kFailed:
+            src.state = "failed";
+            break;
+        default:
+            src.state = "unknown";
+            break;
+    }
+    src.publish = audio_src.publish;
+    resp.audio_sources.push_back(src);
+
+    // video sources
+    for (auto i = _instance._video_srcs.begin(); i != _instance._video_srcs.end(); i++) {
+        const auto &video_src = *(i);
+
+        ros_webrtc::Source src;
+        src.kind = "video";
+        src.label = video_src.label;
+        switch (video_src.interface->state()) {
             case webrtc::MediaStreamTrackInterface::kInitializing:
-                track.state = "initializing";
+                src.state = "initializing";
                 break;
             case webrtc::MediaStreamTrackInterface::kLive:
-                track.state = "live";
+                src.state = "live";
                 break;
             case webrtc::MediaStreamTrackInterface::kEnded:
-                track.state = "ended";
+                src.state = "ended";
                 break;
             case webrtc::MediaStreamTrackInterface::kFailed:
-                track.state = "failed";
+                src.state = "failed";
                 break;
             default:
-                track.state = "unknown";
+                src.state = "unknown";
                 break;
         }
-        track.enabled = (*i)->enabled();
-        resp.tracks.push_back(track);
+        src.publish = video_src.publish;
+        resp.video_sources.push_back(src);
     }
-    webrtc::VideoTrackVector video_tracks = _instance._local_stream->GetVideoTracks();
-    for (auto i = video_tracks.begin(); i != video_tracks.end(); i++) {
-        ros_webrtc::Track track;
-        track.kind = (*i)->kind();
-        track.id = (*i)->id();
-        switch ((*i)->state()) {
-            case webrtc::MediaStreamTrackInterface::kInitializing:
-                track.state = "initializing";
-                break;
-            case webrtc::MediaStreamTrackInterface::kLive:
-                track.state = "live";
-                break;
-            case webrtc::MediaStreamTrackInterface::kEnded:
-                track.state = "ended";
-                break;
-            case webrtc::MediaStreamTrackInterface::kFailed:
-                track.state = "failed";
-                break;
-            default:
-                track.state = "unknown";
-                break;
-        }
-        track.enabled = (*i)->enabled();
-        resp.tracks.push_back(track);
-    }
+
+    // sessions
     for (auto i = _instance._sessions.begin(); i != _instance._sessions.end(); i++) {
         ros_webrtc::SessionKey key;
         key.id = (*i).second->id();
         key.peer_id = (*i).second->peer_id();
         resp.sessions.push_back(key);
     }
+
     return true;
 }
 
@@ -607,4 +600,17 @@ void Host::SessionObserver::on_connection_change(webrtc::PeerConnectionInterface
         ros::CallbackInterfacePtr callback(new Host::EndSessionCallback(_instance, key));
         _instance._nh.getCallbackQueue()->addCallback(callback);
     }
+}
+
+// HostFactory
+
+Host HostFactory::operator()(ros::NodeHandle &nh) {
+    return Host(
+        nh,
+        video_srcs,
+        audio_src,
+        session_constraints,
+        ice_servers,
+        queue_sizes
+    );
 }

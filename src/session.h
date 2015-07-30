@@ -4,9 +4,12 @@
 #include <list>
 
 #include <boost/shared_ptr.hpp>
+#include <bondcpp/bond.h>
 #include <ros/ros.h>
 #include <ros_webrtc/DataChannel.h>
+#include <talk/app/webrtc/mediaconstraintsinterface.h>
 #include <talk/app/webrtc/peerconnectioninterface.h>
+#include <talk/app/webrtc/videosourceinterface.h>
 #include <webrtc/base/scoped_ptr.h>
 #include <webrtc/base/refcount.h>
 #include <webrtc/base/scoped_ref_ptr.h>
@@ -43,18 +46,16 @@ public:
      * \brief Creates an initial session.
      * \param id String identifying the session.
      * \param peer_id String identifying the remote peer.
-     * \param local_stream The local video and audio tracks for the device as a stream to share with the peer.
+     * \param data_channels Data channel settings (e.g. label, reliability, ordering, etc).
      * \param sdp_constraints Media constraints to apply for this session.
-     * \param dcs Data channel settings (e.g. label, reliability, ordering, etc).
      * \param service_names Names of ROS services to use for signaling (e.g. ice-candidates, sdp-offer-answers, etc).
      * \param default_queue_size Default size of publisher and subscriber queues.
      */
     Session(
         const std::string& id,
         const std::string& peer_id,
-        webrtc::MediaStreamInterface* local_stream,
-        const MediaConstraints& sdp_constraints,
         const std::vector<ros_webrtc::DataChannel>& dcs,
+        const MediaConstraints& sdp_constraints,
         const std::map<std::string, std::string>& service_names,
         const QueueSizes& queue_sizes
     );
@@ -72,7 +73,44 @@ public:
     const std::string& peer_id() const;
 
     /**
-     * \class Observer
+     * \brief Video source for a session to be added to local stream as a track.
+     */
+    struct VideoSource {
+
+        VideoSource(
+            const std::string& label,
+            webrtc::VideoSourceInterface *interface,
+            bool publish = false
+        );
+
+        std::string label;
+
+        bool publish;
+
+        rtc::scoped_refptr<webrtc::VideoSourceInterface> interface;
+
+    };
+
+    /**
+     * \brief Audio source for a session to be added to local stream as a track.
+     */
+    struct AudioSource {
+
+        AudioSource(
+            const std::string& label,
+            webrtc::AudioSourceInterface *interface,
+            bool publish = false
+        );
+
+        std::string label;
+
+        rtc::scoped_refptr<webrtc::AudioSourceInterface> interface;
+
+        bool publish;
+
+    };
+
+    /**
      * \brief Callback interface used to observe session life-cycle.
      */
     class Observer {
@@ -92,6 +130,8 @@ public:
      * \param pc_factory Factory used to create a peer connection.
      * \param pc_constraints Constraints to apply to the connection.
      * \param ice_servers Collection of servers to use for ICE (connection negotiation).
+     * \param audio_srcs Local audio sources to share with peer as a stream tracks.
+     * \param video_srcs Local video sources to share with peer as a stream tracks.
      * \param observer Optional observer to call on various session life-cycle events (e.g. disconnect).
      * \return Whether initiation of peer connection succeeded.
      */
@@ -99,6 +139,8 @@ public:
         webrtc::PeerConnectionFactoryInterface* pc_factory,
         const webrtc::MediaConstraintsInterface* pc_constraints,
         const webrtc::PeerConnectionInterface::IceServers& ice_servers,
+        const std::vector<AudioSource> &audio_srcs,
+        const std::vector<VideoSource> &video_srcs,
         ObserverPtr observer = ObserverPtr()
     );
 
@@ -293,6 +335,18 @@ private:
 
     void _close_peer_connection();
 
+    bool _open_local_stream(
+        webrtc::PeerConnectionFactoryInterface* pc_factory,
+        const std::vector<Session::AudioSource> &audio_srcs,
+        const std::vector<Session::VideoSource> &video_srcs
+    );
+
+    void _close_local_stream();
+
+    void _on_bond_formed();
+
+    void _on_bond_broken();
+
     void _on_local_description(webrtc::SessionDescriptionInterface* desc);
 
     void _drain_remote_ice_candidates();
@@ -303,11 +357,17 @@ private:
 
     std::string _id;
 
-    QueueSizes _queue_sizes;
-
     std::string _peer_id;
 
+    QueueSizes _queue_sizes;
+
+    bond::Bond _bond;
+
     MediaConstraints _sdp_constraints;
+
+    std::vector<AudioSinkPtr> audio_sinks;
+
+    std::vector<VideoRendererPtr> video_renderers;
 
     rtc::scoped_refptr<webrtc::MediaStreamInterface> _local_stream;
 

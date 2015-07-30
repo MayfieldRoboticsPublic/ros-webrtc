@@ -1,6 +1,8 @@
 string session_id
 string peer_id
 ros_webrtc/MediaConstraints sdp_constraints
+string[] video_sources
+string[] audio_sources
 ros_webrtc/DataChannel[] data_channels
 string end_session
 string add_session_ice_candidate

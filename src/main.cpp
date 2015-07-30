@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     ROS_INFO("initializing ros");
     ros::init(argc, argv, "webrtc", ros::init_options::AnonymousName);
 
-    ros::NodeHandle nh("~");
+    ros::NodeHandle nh;
 
     ROS_INFO("loading config");
     Config config(Config::get(nh));
@@ -49,10 +49,10 @@ int main(int argc, char **argv) {
     ROS_INFO("creating host");
     HostFactory host_factory;
     host_factory.audio_src = config.microphone;
-    for(size_t i = 0; i != config.cameras.size(); i++) {
+    for (size_t i = 0; i != config.cameras.size(); i++) {
         host_factory.video_srcs.push_back(config.cameras[i]);
     }
-    for(size_t i = 0; i != config.ice_servers.size(); i++) {
+    for (size_t i = 0; i != config.ice_servers.size(); i++) {
         host_factory.ice_servers.push_back(config.ice_servers[i]);
     }
     host_factory.session_constraints = config.session_constraints;
