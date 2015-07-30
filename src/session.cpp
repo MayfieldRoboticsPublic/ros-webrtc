@@ -31,7 +31,7 @@ Session::Session(
     _queue_sizes(queue_sizes),
     _bond(
         "bond",
-        id,
+        id + "_" + _peer_id,
         boost::function<void (void)>(boost::bind(&Session::_on_bond_broken, this)),
         boost::function<void (void)>(boost::bind(&Session::_on_bond_formed, this))
     ) {
