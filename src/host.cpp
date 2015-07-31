@@ -5,6 +5,7 @@
 #include <talk/media/devices/devicemanager.h>
 #include <talk/media/webrtc/webrtcvideoencoderfactory.h>
 #include <talk/media/webrtc/webrtcvideodecoderfactory.h>
+#include <webrtc/system_wrappers/interface/scoped_refptr.h>
 
 #include "device_manager.h"
 #include "host.h"
