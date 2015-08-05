@@ -1,0 +1,23 @@
+cameras:
+  webcam:
+    name: sys://BisonCam, NB Pro
+    label: webcam
+session:
+  constraints:
+    mandatory:
+      maxWidth: "640"
+      minWidth: "640"
+      maxHeight: "480"
+      minHeight: "480"
+    optional:
+      DtlsSrtpKeyAgreement: "true"
+ice_servers:
+- uri: stun:stun.services.mozilla.com:3478
+- uri: stun:stun.l.google.com:19302
+trace:
+  file: /tmp/ros_webrtc.trace
+  filter: all
+queue_sizes:
+  audio: 1000
+  video: 1000
+  data: 1000
