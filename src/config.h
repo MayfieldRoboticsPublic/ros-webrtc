@@ -25,11 +25,17 @@ public:
 
        cameras:
         downward:
+          # video device is ROS sensor_msgs/Image topic
           name: ros:///downward_looking_camera/image_raw
           label: downward
         upward:
-          name: ros:///upward_looking_camera/image_raw
+          # video device is file-system path
+          name: id:///dev/upward_looking_camera
           label: upward
+        wayward:
+          # video device is system dependent name (e.g. Linux 2.6+ its `cat /sys/class/video4linux/video{#}/name`)
+          name: HD Camera
+          label: wayward
        session:
         constraints:
           optional:

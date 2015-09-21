@@ -113,14 +113,17 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, VideoSource& val
     if (!nh.getParam(ros::names::append(root, "name"), value.name)) {
         return false;
     }
-    if (value.name.find("sys://") == 0) {
-        value.name = value.name.substr(6);
-        value.type = VideoSource::SystemType;
+    if (value.name.find("name://") == 0) {
+        value.name = value.name.substr(7);
+        value.type = VideoSource::NameType;
+    } else if (value.name.find("id://") == 0) {
+        value.name = value.name.substr(5);
+        value.type = VideoSource::IdType;
     } else if (value.name.find("ros://") == 0) {
         value.name = value.name.substr(6);
         value.type = VideoSource::ROSType;
     } else {
-        value.type = VideoSource::SystemType;
+        value.type = VideoSource::NameType;
     }
     nh.getParam(ros::names::append(root, "label"), value.label);
     if (!_get(nh, ros::names::append(root, "constraints"), value.constraints)) {

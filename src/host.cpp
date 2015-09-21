@@ -14,7 +14,7 @@
 // VideoSource
 
 VideoSource::VideoSource() :
-    type(NoneType),
+    type(NameType),
     publish(false) {
 }
 
@@ -251,11 +251,11 @@ bool Host::_create_pc_factory() {
 
 bool Host::_open_local_sources() {
     ROS_DEBUG_STREAM("creating system device manager");
-    rtc::scoped_ptr<cricket::DeviceManagerInterface> sys_dev_mgr(
+    rtc::scoped_ptr<cricket::DeviceManagerInterface> default_dev_mgr(
         cricket::DeviceManagerFactory::Create()
     );
-    if (!sys_dev_mgr->Init()) {
-        ROS_ERROR_STREAM("cannot create system device manager");
+    if (!default_dev_mgr->Init()) {
+        ROS_ERROR_STREAM("cannot create default device manager");
         return false;
     }
 
@@ -289,8 +289,9 @@ bool Host::_open_local_sources() {
         // device manager
         cricket::DeviceManagerInterface *dev_mgr = NULL;
         switch (video_src.type) {
-            case VideoSource::SystemType:
-                dev_mgr = sys_dev_mgr.get();
+            case VideoSource::NameType:
+            case VideoSource::IdType:
+                dev_mgr = default_dev_mgr.get();
                 break;
             case VideoSource::ROSType:
                 dev_mgr = ros_dev_mgr.get();
@@ -302,7 +303,23 @@ bool Host::_open_local_sources() {
 
         // capturer
         cricket::Device device;
-        if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &device)) {
+        if (video_src.type == VideoSource::IdType) {
+            std::vector<cricket::Device> devs;
+            if (!dev_mgr->GetVideoCaptureDevices(&devs)) {
+                ROS_ERROR("cannot get video capture devices");
+                return false;
+            }
+            for (auto i = devs.begin(); i != devs.end(); i++) {
+                if ((*i).id == video_src.name) {
+                    device = *i;
+                    break;
+                }
+            }
+            if (device.name.empty()) {
+                ROS_ERROR("cannot get video capture device for file '%s'", video_src.name.c_str());
+                return false;
+            }
+        } else if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &device)) {
             ROS_ERROR("cannot get video capture device for '%s'", video_src.name.c_str());
             return false;
         }

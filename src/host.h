@@ -21,8 +21,8 @@
 struct VideoSource {
 
     enum Type {
-        NoneType = 0,
-        SystemType,
+        NameType = 0,
+        IdType,
         ROSType
     };
 
