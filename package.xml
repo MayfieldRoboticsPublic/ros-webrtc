@@ -47,10 +47,12 @@
   <build_depend>libjsoncpp-dev</build_depend>
   <build_depend>bondcpp</build_depend>
   <build_depend>image_transport</build_depend>
+  <build_depend>libjingle</build_depend>
   
   <run_depend>cv_bridge</run_depend>
   <run_depend>roscpp</run_depend>
   <run_depend>std_msgs</run_depend>
+  <run_depend>libjingle</run_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
