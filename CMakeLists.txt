@@ -182,11 +182,19 @@ endforeach(cxx_flag)
 # )
 
 ## Mark executables and/or libraries for installation
-# install(TARGETS ros_webrtc ros_webrtc_node
+#install(TARGETS ros_webrtc ros_webrtc_node
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 # )
+
+install(DIRECTORY test/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/test
+)
+
+install(DIRECTORY srv/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/srv
+)
 
 ## Mark cpp header files for installation
 # install(DIRECTORY include/${PROJECT_NAME}/
