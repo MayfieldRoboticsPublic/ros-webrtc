@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>ros_webrtc</name>
-  <version>0.1.0</version>
+  <version>14.3.1</version>
   <description>Bring WebRTC to ROS</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag --> 
