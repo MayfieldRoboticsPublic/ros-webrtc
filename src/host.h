@@ -48,6 +48,8 @@ struct VideoSource {
 
     rtc::scoped_refptr<webrtc::VideoSourceInterface> interface;
 
+    VideoRendererPtr renderer;
+
 };
 
 /**
@@ -70,6 +72,8 @@ struct AudioSource {
     bool publish;
 
     rtc::scoped_refptr<webrtc::AudioSourceInterface> interface;
+
+    AudioSinkPtr sink;
 
 };
 

@@ -261,17 +261,6 @@ bool Session::_open_local_stream(
             return false;
         }
 
-        // sink
-        if (audio_src.publish) {
-            AudioSinkPtr audio_sink(new AudioSink(
-                _nh,
-                topic_for({"local", "audio_" + audio_track->id()}),
-                _queue_sizes.audio,
-                audio_track
-            ));
-            _audio_sinks.push_back(audio_sink);
-        }
-
         local_stream->AddTrack(audio_track);
     }
 
@@ -296,17 +285,6 @@ bool Session::_open_local_stream(
                 video_label.c_str(), video_src.label.c_str()
             );
             return false;
-        }
-
-        // renderer
-        if (video_src.publish) {
-            VideoRendererPtr video_renderer(new VideoRenderer(
-                _nh,
-                topic_for({"local", "video_" + video_track->id()}),
-                _queue_sizes.video,
-                video_track
-            ));
-            _video_renderers.push_back(video_renderer);
         }
 
         local_stream->AddTrack(video_track);

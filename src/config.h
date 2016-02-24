@@ -32,6 +32,12 @@ public:
           # video device is file-system path
           name: id:///dev/upward_looking_camera
           label: upward
+          constraints:
+              mandatory:
+                maxWidth: "640"
+                minWidth: "640"
+                maxHeight: "480"
+                minHeight: "480"
         wayward:
           # video device is system dependent name (e.g. Linux 2.6+ its `cat /sys/class/video4linux/video{#}/name`)
           name: HD Camera
