@@ -2,13 +2,14 @@ cameras:
   webcam:
     name: sys://BisonCam, NB Pro
     label: webcam
+    constraints:
+      mandatory:
+        maxWidth: "640"
+        minWidth: "640"
+        maxHeight: "480"
+        minHeight: "480"
 session:
   constraints:
-    mandatory:
-      maxWidth: "640"
-      minWidth: "640"
-      maxHeight: "480"
-      minHeight: "480"
     optional:
       DtlsSrtpKeyAgreement: "true"
 ice_servers:

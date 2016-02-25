@@ -72,6 +72,12 @@ cameras:
     name: ros:///upward_looking_camera/image_raw
     label: upward
     publish: true
+    constraints:
+      mandatory:
+        maxWidth: "640"
+        minWidth: "640"
+        maxHeight: "480"
+        minHeight: "480"
 ice_servers:
 - {uri: 'stun:stun.services.mozilla.com:3478'}
 - {uri: 'stun:stun.l.google.com:19302'}
@@ -94,6 +100,46 @@ sessions are here:
 
 - `srv/GetHost.srv`
 - `srv/GetSession.srv`
+
+
+### publishing local media sources
+
+If you've enabled publishing for a source, e.g.:
+
+```bash
+$ rosparam get /ros_webrtc/cameras/upward/publish
+true
+```
+
+then its media (e.g. `sensor_msgs/Image` for video) will be published to a
+topic, e.g.:
+
+```bash
+$ rostopic show /ros_webrtc/local/upward
+Type: sensor_msgs/Image
+
+Publishers: 
+ * /webrtc/ros_webrtc_host (http://ai-gazelle:53357/)
+
+Subscribers: None
+
+```
+
+### constraining video sizes
+
+If you need a video source size to be within some range you do so by setting
+mandatory constraints on it like e.g.:
+
+```bash
+$ rosparam get /webrtc/cameras/upward/
+constraints:
+  mandatory: {maxHeight: '600', maxWidth: '800', minHeight: '600', minWidth: '800'}
+label: upward
+name: id:///dev/video0
+publish: true
+```
+
+which constrains the `upward` video source to have size 800x600.
 
 ## tests
 

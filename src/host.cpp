@@ -282,6 +282,34 @@ bool Host::_open_local_sources() {
         return false;
     }
 
+    // audio track
+    std::string audio_label = _audio_src.label;
+    if (audio_label.empty()) {
+        std::stringstream ss;
+        ss << "a" << 0;
+        audio_label = ss.str();
+    }
+    rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
+        _pc_factory->CreateAudioTrack(audio_label, _audio_src.interface)
+    );
+    if(audio_track.get() == NULL) {
+        ROS_ERROR(
+            "cannot create audio track '%s' for source '%s'",
+            audio_label.c_str(), audio_label.c_str()
+        );
+        return false;
+    }
+
+    // audio sink
+    if (_audio_src.publish) {
+        _audio_src.sink = AudioSinkPtr(new AudioSink(
+            _nh,
+            topic_for({"local", audio_label}),
+            _queue_sizes.audio,
+            audio_track
+        ));
+    }
+
     // video sources
     for (size_t i = 0; i != _video_srcs.size(); i++) {
         VideoSource& video_src = _video_srcs[i];
@@ -339,6 +367,34 @@ bool Host::_open_local_sources() {
             return false;
         }
         video_capturer.release();
+
+        // track
+        std::string video_label = video_src.label;
+        if (video_label.empty()) {
+            std::stringstream ss;
+            ss << "v" << i + 1;
+            video_label = ss.str();
+        }
+        rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
+            _pc_factory->CreateVideoTrack(video_label, video_src.interface)
+        );
+        if(video_track.get() == NULL) {
+            ROS_ERROR(
+                "cannot create video track '%s' for source '%s'",
+                video_label.c_str(), video_label.c_str()
+            );
+            return false;
+        }
+
+        // renderer
+        if (video_src.publish) {
+            video_src.renderer = VideoRendererPtr(new VideoRenderer(
+                _nh,
+                topic_for({"local", video_label}),
+                _queue_sizes.video,
+                video_track
+            ));
+        }
     }
 
     return true;
