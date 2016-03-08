@@ -113,6 +113,7 @@ generate_messages(
 #  CATKIN_DEPENDS roscpp std_msgs
 #  DEPENDS system_lib
 #)
+catkin_package()
 
 ###########
 ## Build ##
