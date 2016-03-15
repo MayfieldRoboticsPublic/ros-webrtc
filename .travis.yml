@@ -1,0 +1,37 @@
+services:
+  - docker
+
+branches:
+  only:
+    - master
+    - develop
+
+env:
+  matrix:
+    - ARCH=arm
+    - ARCH=x86
+
+notifications:
+  email:
+    recipients:
+      - dev@mayfieldrobotics.com
+    on_success: change
+    on_failure: change
+
+install:
+  - $DOCKER_READONLY
+
+script:
+  - |
+    if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
+      repo=$(echo $TRAVIS_REPO_SLUG | cut -d/ -f2)
+      if [ "$ARCH" = "arm" ]; then
+        ssh -o StrictHostKeyChecking=no -A -p 12422 vpn.mayrobo.com \
+          docker run --rm -v \$SSH_AUTH_SOCK:/ssh-agent -e SSH_AUTH_SOCK=/ssh-agent mayfieldrobotics/gizmo_base:ros_indigo_arm \
+          "sh -c 'mkdir -pm 700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts && git clone git@github.com:mayfieldrobotics/embedded-ansible -b deb-build && cd embedded-ansible && ./build.py -d maydistro/may.yaml $repo'"
+      elif [ "$ARCH" = "x86" ]; then
+        docker run --rm -v $SSH_AUTH_SOCK:/ssh-agent -e SSH_AUTH_SOCK=/ssh-agent -v $TRAVIS_BUILD_DIR:/root/$repo \
+          mayfieldrobotics/gizmo_base:ros_indigo_x86 \
+          sh -c "mkdir -pm 700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts && git clone git@github.com:mayfieldrobotics/embedded-ansible -b deb-build && cd embedded-ansible && ./build.py -d maydistro/may.yaml -r /root/$repo $repo"
+      fi
+    fi
