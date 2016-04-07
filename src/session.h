@@ -7,6 +7,7 @@
 #include <bondcpp/bond.h>
 #include <ros/ros.h>
 #include <ros_webrtc/DataChannel.h>
+#include <ros_webrtc/Session.h>
 #include <talk/app/webrtc/mediaconstraintsinterface.h>
 #include <talk/app/webrtc/peerconnectioninterface.h>
 #include <talk/app/webrtc/videosourceinterface.h>
@@ -27,11 +28,12 @@ struct QueueSizes {
 
     QueueSizes(uint32_t size = 0);
 
-    QueueSizes(uint32_t video, uint32_t audio, uint32_t data);
+    QueueSizes(uint32_t video, uint32_t audio, uint32_t data, uint32_t event);
 
     uint32_t video;
     uint32_t audio;
     uint32_t data;
+    uint32_t event;
 
 };
 
@@ -161,6 +163,8 @@ public:
 
     void set_remote_session_description(webrtc::SessionDescriptionInterface* sdp);
 
+    operator ros_webrtc::Session () const;
+
     struct DataChannel {
 
         DataChannel(const ros_webrtc::DataChannel& conf);
@@ -176,6 +180,8 @@ public:
         std::string send_topic(const Session& session) const;
 
         std::string recv_topic(const Session& session) const;
+
+        operator ros_webrtc::DataChannel () const;
 
         ros_webrtc::DataChannel conf;
 
@@ -351,6 +357,28 @@ private:
 
     void _drain_remote_ice_candidates();
 
+    void _begin_event();
+
+    void _renegotiation_needed_event();
+
+    void _signaling_state_change_event(webrtc::PeerConnectionInterface::SignalingState new_state);
+
+    void _ice_state_change_event(webrtc::PeerConnectionInterface::IceState new_state);
+
+    void _ice_gathering_change_event(webrtc::PeerConnectionInterface::IceGatheringState new_state);
+
+    void _ice_connection_change_event(webrtc::PeerConnectionInterface::IceConnectionState new_state);
+
+    void _ice_complete_event();
+
+    void _add_stream_event();
+
+    void _remove_stream_event();
+
+    void _data_channel_event();
+
+    void _end_event();
+
     ros::NodeHandle _nh;
 
     ros::Subscriber _s;
@@ -412,6 +440,8 @@ private:
     typedef std::list<VideoRendererPtr> VideoRenderers;
 
     VideoRenderers _video_renderers;
+
+    ros::Publisher _epub;
 };
 
 typedef boost::shared_ptr<Session> SessionPtr;

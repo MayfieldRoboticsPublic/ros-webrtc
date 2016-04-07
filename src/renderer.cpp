@@ -11,8 +11,7 @@ AudioSink::AudioSink(
     ros::NodeHandle& nh,
     const std::string& topic,
     uint32_t queue_size,
-    webrtc::AudioTrackInterface* audio_track
-    ) :
+    webrtc::AudioTrackInterface* audio_track) :
     _audio_track(audio_track),
     _rpub(nh.advertise<ros_webrtc::Audio>(topic, queue_size)) {
     ROS_DEBUG_STREAM("registering audio renderer");
@@ -35,8 +34,7 @@ void AudioSink::OnData(
         int bits_per_sample,
         int sample_rate,
         int number_of_channels,
-        int number_of_frames
-        ) {
+        int number_of_frames) {
     ROS_INFO_STREAM(
         "audio data -"
         << " bps : " << bits_per_sample
@@ -136,7 +134,7 @@ size_t UnchunkedDataObserver::reap() {
 }
 
 void UnchunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
-    ROS_INFO(
+    ROS_DEBUG(
         "data message for '%s' - binary=%s, size=%zu",
         _dc->label().c_str(), buffer.binary ? "true" : "false", buffer.data.length()
     );
