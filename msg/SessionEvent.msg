@@ -1,0 +1,16 @@
+string id
+string peer_id
+
+string TYPE_BEGIN=begin
+string TYPE_RENEGOTIATION_NEEDED=renegotiation_needed
+string TYPE_SIGNALING_STATE_CHANGE=signaling_state_change
+string TYPE_ICE_CONNECTION_CHANGE=ice_connection_change
+string TYPE_ICE_GATHERING_CHANGE=ice_gathering_change
+string TYPE_ICE_COMPLETE=ice_complete
+string TYPE_ICE_STATE_CHANGE=ice_state_change
+string TYPE_ADD_STREAM=add_stream
+string TYPE_REMOVE_STREAM=remove_stream
+string TYPE_DATA_CHANNEL=data_channel
+string TYPE_END=end
+
+string type

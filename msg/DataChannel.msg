@@ -4,3 +4,4 @@ bool reliable
 bool ordered
 string protocol
 bool broadcast
+string state

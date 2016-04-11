@@ -66,9 +66,11 @@ add_message_files(
   Data.msg
   DataChannel.msg
   MediaConstraints.msg
+  Session.msg
+  SessionEvent.msg
+  SessionKey.msg
   Source.msg
   Track.msg
-  SessionKey.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -138,6 +140,7 @@ include_directories(
 add_executable(host
    src/main.cpp
    src/config.cpp
+   src/convert.cpp
    src/host.cpp
    src/media_constraints.cpp
    src/media_type.cpp

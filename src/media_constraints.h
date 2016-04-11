@@ -1,6 +1,7 @@
 #ifndef ROS_WEBRTC_MEDIA_CONSTRAINTS_H_
 #define ROS_WEBRTC_MEDIA_CONSTRAINTS_H_
 
+#include <ros_webrtc/MediaConstraints.h>
 #include <talk/app/webrtc/mediaconstraintsinterface.h>
 
 /**
@@ -19,6 +20,8 @@ public:
     Constraints& optional();
 
     const Constraints& optional() const;
+
+    operator ros_webrtc::MediaConstraints () const;
 
 // webrtc::MediaConstraintsInterface
 

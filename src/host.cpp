@@ -6,6 +6,7 @@
 #include <talk/media/webrtc/webrtcvideoencoderfactory.h>
 #include <talk/media/webrtc/webrtcvideodecoderfactory.h>
 
+#include "convert.h"
 #include "device_manager.h"
 #include "host.h"
 #include "util.h"
@@ -52,13 +53,15 @@ AudioSource::AudioSource(
 QueueSizes::QueueSizes(uint32_t size) :
     audio(size),
     video(size),
-    data(size) {
+    data(size),
+    event(size) {
 }
 
-QueueSizes::QueueSizes(uint32_t video, uint32_t audio, uint32_t data) :
+QueueSizes::QueueSizes(uint32_t video, uint32_t audio, uint32_t data, uint32_t event) :
     audio(audio),
     video(video),
-    data(data) {
+    data(data),
+    event(event) {
 }
 
 // Host
@@ -532,29 +535,7 @@ bool Host::Service::get_session(ros::ServiceEvent<ros_webrtc::GetSession::Reques
     if (session == NULL)
         return false;
     auto &resp = event.getResponse();
-    webrtc::scoped_refptr<webrtc::PeerConnectionInterface> pc(session->peer_connection());
-    if (pc.get() != NULL) {
-        switch (session->peer_connection()->signaling_state()) {
-            case webrtc::PeerConnectionInterface::SignalingState::kStable:
-                resp.signaling_state = "stable";
-                break;
-            case webrtc::PeerConnectionInterface::SignalingState::kHaveLocalOffer:
-                resp.signaling_state = "have_local_offer";
-                break;
-            case webrtc::PeerConnectionInterface::SignalingState::kHaveLocalPrAnswer:
-                resp.signaling_state = "have_local_pr_answer";
-                break;
-            case webrtc::PeerConnectionInterface::SignalingState::kHaveRemoteOffer:
-                resp.signaling_state = "have_remote_offer";
-                break;
-            case webrtc::PeerConnectionInterface::SignalingState::kHaveRemotePrAnswer:
-                resp.signaling_state = "have_remote_pr_answer";
-                break;
-            case webrtc::PeerConnectionInterface::SignalingState::kClosed:
-                resp.signaling_state = "closed";
-                break;
-        };
-    }
+    resp.session = *session;
     return true;
 }
 
@@ -563,45 +544,14 @@ bool Host::Service::get_host(ros::ServiceEvent<ros_webrtc::GetHost::Request, ros
     auto &resp = event.getResponse();
 
     // session constraints
-    for (auto i = _instance._session_constraints.mandatory().begin();
-         i != _instance._session_constraints.mandatory().end();
-         i++) {
-        ros_webrtc::Constraint constraint;
-        constraint.key = (*i).key;
-        constraint.value = (*i).value;
-        resp.sdp_constraints.mandatory.push_back(constraint);
-    }
-    for (auto i = _instance._session_constraints.optional().begin();
-         i != _instance._session_constraints.optional().end();
-         i++) {
-        ros_webrtc::Constraint constraint;
-        constraint.key = (*i).key;
-        constraint.value = (*i).value;
-        resp.sdp_constraints.optional.push_back(constraint);
-    }
+    resp.sdp_constraints = _instance._session_constraints;
 
     // audio sources
     const auto &audio_src = _instance._audio_src;
     ros_webrtc::Source src;
     src.kind = "audio";
     src.label = audio_src.label;
-    switch (audio_src.interface->state()) {
-        case webrtc::MediaStreamTrackInterface::kInitializing:
-            src.state = "initializing";
-            break;
-        case webrtc::MediaStreamTrackInterface::kLive:
-            src.state = "live";
-            break;
-        case webrtc::MediaStreamTrackInterface::kEnded:
-            src.state = "ended";
-            break;
-        case webrtc::MediaStreamTrackInterface::kFailed:
-            src.state = "failed";
-            break;
-        default:
-            src.state = "unknown";
-            break;
-    }
+    src.state = audio_src.interface != NULL ? to_string(audio_src.interface->state()) : "ended";
     src.publish = audio_src.publish;
     resp.audio_sources.push_back(src);
 
@@ -612,23 +562,7 @@ bool Host::Service::get_host(ros::ServiceEvent<ros_webrtc::GetHost::Request, ros
         ros_webrtc::Source src;
         src.kind = "video";
         src.label = video_src.label;
-        switch (video_src.interface->state()) {
-            case webrtc::MediaStreamTrackInterface::kInitializing:
-                src.state = "initializing";
-                break;
-            case webrtc::MediaStreamTrackInterface::kLive:
-                src.state = "live";
-                break;
-            case webrtc::MediaStreamTrackInterface::kEnded:
-                src.state = "ended";
-                break;
-            case webrtc::MediaStreamTrackInterface::kFailed:
-                src.state = "failed";
-                break;
-            default:
-                src.state = "unknown";
-                break;
-        }
+        src.state = video_src.interface != NULL ? to_string(video_src.interface->state()) : "ended";
         src.publish = video_src.publish;
         resp.video_sources.push_back(src);
     }
