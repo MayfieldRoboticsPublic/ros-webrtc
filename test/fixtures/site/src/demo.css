@@ -1,0 +1,148 @@
+body {
+    font: 20px sans-serif;
+    margin: 0;
+}
+
+/* player */
+
+#player {
+    position: relative;
+    text-align: center;
+    background-color: black;
+}
+
+#player video {
+}
+
+/* msg */
+
+#msg-send {
+  background-color: orange;
+  border-top: 1px dashed grey;
+}
+
+#msg-send i {
+  float: left;
+  position: relative;
+  z-index: 2;
+}
+
+#msg-send input {
+  width: 100%;
+  margin-left: 5px;
+  padding-left: 5px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  height: 40px;
+  border-bottom: none;
+  border-top: none;
+}
+
+#msg-send input:focus {
+  outline: none;
+}
+
+#msg-send span {
+  display: block;
+  overflow: hidden;
+}
+
+#msg-recv-header {
+  background-color: orange;
+  border-top: 1px dashed grey;
+}
+
+#msg-recv-header i {
+  float: left;
+  position: relative;
+  z-index: 2;
+}
+
+#msg-recv-header button {
+  font: 20px sans-serif;
+  margin-right: 1px;
+  margin-top: 1px;
+}
+
+#msg-recv-log {
+  overflow: auto;
+}
+
+#msg-recv-log ol {
+  list-style-type: none;
+  padding-left: 0;
+  counter-reset: msg-recv-no;
+  border-bottom: 1px dashed grey;
+}
+
+#msg-recv-log ol li {
+  position: relative;
+  margin-left: 50px;
+  padding-left: 10px;
+}
+
+@keyframes msg-recv-log-glow {
+  0% {
+    color: rgb(150, 150, 150);
+  }
+
+  50% {
+    color: rgb(255, 255, 255);
+  }
+
+  100% {
+    color: rgb(150, 150, 150);
+  }
+}
+
+#msg-recv-log ol li::before {
+  animation-duration: 1s;
+  animation-name: msg-recv-log-glow;
+  counter-increment: msg-recv-no;
+  content: counter(msg-recv-no);
+  text-align: right;
+  position: absolute;
+  left: -52px;
+  width: 50px;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  margin-right: 5px;
+  font-size: 80%;
+  background-color: rgb(50, 50, 50);
+  color: rgb(150, 150, 150);
+  font-weight: bold;
+  padding: 3px 8px;
+  border-right: 2px solid grey;
+}
+
+.msg-flash {
+  position: absolute;
+  margin-left: 10px;
+  margin-top: 10px;
+  height: 20px;
+  width: 20px;
+  background-color: white;
+  z-index: 1;
+  opacity: 0.2;
+}
+
+/* settings */
+
+#settings-toggle {
+    transition: all 0.5s ease;
+    color: #fff;
+    opacity: 0.5;
+    position: absolute;
+    background-color: black;
+    top: 0px;
+    right: 0px;
+}
+
+#settings-toggle:hover {
+    opacity: 0.9;
+}
+
+#settings-defaults {
+    float: left;
+}

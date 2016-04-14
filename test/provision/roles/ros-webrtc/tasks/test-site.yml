@@ -1,0 +1,19 @@
+---
+
+- name: install test site npm deps
+  shell: npm install
+  args:
+    executable: /bin/bash
+    chdir: "{{ ros_webrtc_src_dir }}/test/fixtures/site"
+
+- name: install test site bower deps
+  shell: bower install
+  args:
+    executable: /bin/bash
+    chdir: "{{ ros_webrtc_src_dir }}/test/fixtures/site"
+
+- name: build test site
+  shell: grunt clean build
+  args:
+    executable: /bin/bash
+    chdir: "{{ ros_webrtc_src_dir }}/test/fixtures/site"

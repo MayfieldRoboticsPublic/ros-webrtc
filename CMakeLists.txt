@@ -25,7 +25,7 @@ pkg_check_modules(jsoncpp REQUIRED jsoncpp)
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
-# catkin_python_setup()
+catkin_python_setup()
 
 ## Coverage
 set(COVERAGE "OFF" CACHE STRING "Enable coverage generation.")
@@ -62,28 +62,47 @@ endif()
 add_message_files(
   FILES
   Audio.msg
+  Close.msg
   Constraint.msg
-  Data.msg
   DataChannel.msg
+  Data.msg
+  ExampleCall.msg
+  IceCandidate.msg
+  IceConnectionState.msg
   MediaConstraints.msg
-  Session.msg
-  SessionEvent.msg
-  SessionKey.msg
+  PeerConnectionKey.msg
+  PeerConnection.msg
+  SessionDescription.msg
+  SignalingState.msg
   Source.msg
+  Stream.msg
   Track.msg
 )
 
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
-  AddSessionIceCandidate.srv
-  BeginSession.srv
-  ConnectSession.srv
-  EndSession.srv
+  AddIceCandidate.srv
+  CreateDataChannel.srv
+  CreateOffer.srv
+  CreatePeerConnection.srv
+  DeletePeerConnection.srv
+  ExampleCallPeer.srv
+  ExampleGetCalls.srv
+  ExampleHangup.srv
   GetHost.srv
-  GetSession.srv
-  SetSessionDescription.srv
-  SendSessionData.srv
+  GetPeerConnection.srv
+  OnAddStream.srv
+  OnDataChannel.srv
+  OnIceCandidate.srv
+  OnIceConnectionStateChange.srv
+  OnNegotiationNeeded.srv
+  OnRemoveStream.srv
+  OnSetSessionDescription.srv
+  OnSignalingStateChange.srv
+  RotateVideoSource.srv
+  SendData.srv
+  SetRemoteDescription.srv
 )
 
 ## Generate actions in the 'action' folder
@@ -137,28 +156,29 @@ include_directories(
 # )
 
 ## Declare a cpp executable
-add_executable(host
-   src/main.cpp
-   src/config.cpp
-   src/convert.cpp
-   src/host.cpp
-   src/media_constraints.cpp
-   src/media_type.cpp
-   src/renderer.cpp
-   src/device_manager.cpp
-   src/video_capture.cpp
-   src/session.cpp
-   src/util.cpp
+add_executable(ros_webrtc_host
+   src/cpp/main.cpp
+   src/cpp/config.cpp
+   src/cpp/convert.cpp
+   src/cpp/data_channel.cpp
+   src/cpp/host.cpp
+   src/cpp/media_constraints.cpp
+   src/cpp/media_type.cpp
+   src/cpp/renderer.cpp
+   src/cpp/device_manager.cpp
+   src/cpp/video_capture.cpp
+   src/cpp/peer_connection.cpp
+   src/cpp/util.cpp
 )
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
-add_dependencies(host
+add_dependencies(ros_webrtc_host
   ros_webrtc_generate_messages_cpp
 )
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(host
+target_link_libraries(ros_webrtc_host
   ${catkin_LIBRARIES}
   ${jingle_STATIC_LDFLAGS}
   ${jsoncpp_STATIC_LDFLAGS}
@@ -168,7 +188,7 @@ target_link_libraries(host
 
 ## Specify additional compile flags
 foreach(cxx_flag "-std=c++0x" ${jingle_CFLAGS} ${jsoncpp_CFLAGS})
-  set_property(TARGET host APPEND_STRING PROPERTY COMPILE_FLAGS " ${cxx_flag}")
+  set_property(TARGET ros_webrtc_host APPEND_STRING PROPERTY COMPILE_FLAGS " ${cxx_flag}")
 endforeach(cxx_flag)
 
 #############
@@ -180,18 +200,19 @@ endforeach(cxx_flag)
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-# install(PROGRAMS
-#   scripts/my_python_script
-#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+install(PROGRAMS
+  scripts/ros_webrtc_example
+  scripts/ros_webrtc_rosbridge
+  scripts/ros_webrtc_signaling
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
 ## Mark executables and/or libraries for installation
-install(TARGETS host
+install(TARGETS ros_webrtc_host
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
-
 
 ## Mark cpp header files for installation
 # install(DIRECTORY include/${PROJECT_NAME}/
@@ -201,11 +222,10 @@ install(TARGETS host
 # )
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
-# install(FILES
-#   # myfile1
-#   # myfile2
-#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-# )
+install(FILES
+  ros_webrtc.launch
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
 
 #############
 ## Testing ##
@@ -225,7 +245,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_download_test_data(
     ${PROJECT_NAME}_sim_2015-02-23-15-14-55.bag
     https://s3-us-west-1.amazonaws.com/ai-mf-data/sim_2015-02-23-15-14-55.bag
-    DESTINATION /tmp/${PROJECT_NAME}
+    DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/bags
     FILENAME sim_2015-02-23-15-14-55.bag
     MD5 1832f700f1066590f0323bceda474bd7
   )
@@ -234,7 +254,9 @@ if(CATKIN_ENABLE_TESTING)
   find_package(rostest REQUIRED)
   foreach(T
       test/integration/host-test.launch
-      test/integration/session-test.launch
+      test/integration/peer-connection-test.launch
+      test/integration/site-call-test.launch
+      test/integration/site-wait-test.launch
     )
     add_rostest(${T})
   endforeach()
@@ -242,9 +264,11 @@ if(CATKIN_ENABLE_TESTING)
   ## Unit
   include_directories(src)
   catkin_add_gtest(unit_test
+      test/unit/test_media_type.cpp
+      src/cpp/media_type.cpp
+      test/unit/test_media_constraints.cpp
+      src/cpp/media_constraints.cpp
       test/unit/main.cpp
-      src/media_constraints.cpp
-      src/media_type.cpp
   )
   foreach(cxx_flag "-std=c++11" ${jingle_CFLAGS} ${jsoncpp_CFLAGS})
     set_property(TARGET unit_test APPEND_STRING PROPERTY COMPILE_FLAGS " ${cxx_flag}")

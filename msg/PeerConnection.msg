@@ -1,0 +1,10 @@
+string session_id
+string peer_id
+string signaling_state
+string ice_connection_state
+string ice_gathering_state
+ros_webrtc/MediaConstraints sdp_constraints
+bool is_offerer
+ros_webrtc/Track[] local_tracks
+ros_webrtc/Track[] remote_tracks 
+ros_webrtc/DataChannel[] data_channels

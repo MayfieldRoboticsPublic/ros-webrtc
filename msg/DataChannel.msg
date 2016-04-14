@@ -3,5 +3,5 @@ int32 id
 bool reliable
 bool ordered
 string protocol
-bool broadcast
+int32 chunk_size
 string state

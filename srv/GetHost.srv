@@ -2,4 +2,4 @@
 ros_webrtc/MediaConstraints sdp_constraints
 ros_webrtc/Source[] audio_sources
 ros_webrtc/Source[] video_sources
-ros_webrtc/SessionKey[] sessions
+ros_webrtc/PeerConnectionKey[] peer_connections

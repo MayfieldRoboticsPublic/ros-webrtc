@@ -1,0 +1,15 @@
+---
+
+- hosts: all
+  vars:
+    chromedriver_version: '2.20'
+    ros_webrtc_libjingle_build: release
+    ros_webrtc_libjingle_sha256sum: d1ebf57aad9b561882d9ca31796f00f4f6755c3f4be59c59817d938e51e3e6e2
+    ros_webrtc_src_dir: "{{ lookup('env', 'TRAVIS_CI_PATH') }}"
+    ros_webrtc_workspace_dir: "{{ lookup('env', 'TRAVIS_WS_PATH') }}"
+  roles:
+  - {role: chrome, become: yes}
+  - {role: chrome-driver, become: yes}
+  - nodejs
+  - {role: ros, become: yes}
+  - ros-webrtc
