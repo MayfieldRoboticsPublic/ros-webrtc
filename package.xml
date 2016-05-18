@@ -13,13 +13,12 @@
   <!-- One license tag required, multiple allowed, one license per tag -->
   <!-- Commonly used license strings: -->
   <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
-  <license>TODO</license>
+  <license>MIT</license>
 
 
   <!-- Url tags are optional, but mutiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
-  <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/ros_webrtc</url> -->
+  <url type="website">https://github.com/mayfieldrobotics/ros-webrtc</url> -->
 
 
   <!-- Author tags are optional, mutiple are allowed, one per tag -->
@@ -47,12 +46,11 @@
   <build_depend>libjsoncpp-dev</build_depend>
   <build_depend>bondcpp</build_depend>
   <build_depend>image_transport</build_depend>
-  <build_depend>libjingle</build_depend>
   
   <run_depend>cv_bridge</run_depend>
+  <run_depend>rosbridge_library</run_depend>
   <run_depend>roscpp</run_depend>
   <run_depend>std_msgs</run_depend>
-  <run_depend>libjingle</run_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
@@ -60,6 +58,5 @@
     <!-- <metapackage/> -->
 
     <!-- Other tools can request additional information be placed here -->
-
   </export>
 </package>

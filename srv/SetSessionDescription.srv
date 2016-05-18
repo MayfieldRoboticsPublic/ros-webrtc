@@ -1,5 +1,0 @@
-string session_id
-string peer_id
-string type
-string sdp
----

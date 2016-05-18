@@ -1,0 +1,1 @@
+shopt -s globstar

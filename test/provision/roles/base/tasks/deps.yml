@@ -1,0 +1,29 @@
+---
+
+- name: install tools
+  apt: name={{ item }} state=present
+  with_items:
+  - vim
+  - htop
+  - tmux
+  - build-essential
+  - git
+  - wget
+  - zip
+  - curl
+  - pkg-config
+  - iftop
+  - python2.7-dev
+  tags: [tools]
+  become: yes
+
+- name: use vim as editor
+  alternatives: name=editor path=/usr/bin/vim.basic
+  tags: [tools]
+  become: yes
+
+- name: install pip
+  shell: "curl https://bootstrap.pypa.io/get-pip.py | python"
+  args:
+    creates: /usr/local/bin/pip
+  become: yes

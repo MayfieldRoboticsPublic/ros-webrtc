@@ -1,0 +1,25 @@
+---
+
+- name: create catkin workspace dirs
+  file: path="{{ item }}" state=directory recurse=yes mode=0755
+  with_items:
+  - "{{ ros_webrtc_workspace_dir }}/src"
+
+- name: init catkin workspace
+  shell: "source /opt/ros/{{ ros_release }}/setup.bash && catkin_init_workspace"
+  args:
+    executable: /bin/bash
+    chdir: "{{ ros_webrtc_workspace_dir }}/src"
+    creates: "{{ ros_webrtc_workspace_dir }}/src/CMakeLists.txt"
+
+- name: symlink src
+  file: src="{{ ros_webrtc_src_dir }}" dest="{{ ros_webrtc_workspace_dir }}/src/ros_webrtc" state=link
+
+- name: install ros deps
+  shell: "rosdep install -y --from-paths {{ ros_webrtc_workspace_dir }}/src --ignore-src --rosdistro={{ ros_release }}"
+
+- name: build workspace
+  shell: "source /opt/ros/{{ ros_release }}/setup.bash && catkin_make -DCMAKE_BUILD_TYPE={{ ros_webrtc_build_type }} -DCOVERAGE={{ ros_webrtc_coverage }}"
+  args:
+    executable: /bin/bash
+    chdir: "{{ ros_webrtc_workspace_dir }}"

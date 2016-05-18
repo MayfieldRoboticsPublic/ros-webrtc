@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+    <title>ROS WebRTC</title>
+
+    <link rel="stylesheet" href="css/bootstrap.css" type="text/css"/>
+    <link rel="stylesheet" href="css/font-awesome.css" />
+    <link rel="stylesheet" href="css/demo.css" type="text/css" />
+
+    <script type="text/javascript" src="js/adapter.js"></script>
+    <script type="text/javascript" src="js/jquery.js"></script>
+    <script type="text/javascript" src="js/bootstrap.js"></script>
+    <script type="text/javascript" src="js/screenfull.js"></script>
+    <script type="text/javascript" src="js/underscore.js"></script>
+    <script type="text/javascript" src="js/backbone.js"></script>
+    <script type="text/javascript" src="js/uuid.js"></script>
+    <script type="text/javascript" src="js/meaty.js"></script>
+    <script type="text/javascript" src="js/eventemitter2.js"></script>
+    <script type="text/javascript" src="js/screenfull.js"></script>
+    <script type="text/javascript" src="js/roslib.js"></script>
+    <script type="text/javascript" src="js/ros_webrtc.js"></script>
+
+    <script type="text/javascript" src="http://localhost:35729/livereload.js"></script>
+</head>
+
+<body>
+
+    <!-- content -->
+
+    <div class="container-fluid">
+
+      <div class="row" id="player">
+        <i id="settings-toggle" class="fa fa-2x fa-cog" title="settings"></i>
+        <video autoplay></video>
+      </div>
+
+      <div class="row" id="msg-send">
+        <div class="msg-flash"></div>
+        <i class="fa fa-2x fa-cloud-upload" title="send"></i>
+        <span><input></input></span>
+      </div>
+
+      <div id="msg-recv">
+        <div id="msg-recv-header" class="row">
+          <div class="msg-flash"></div>
+          <i class="fa fa-2x fa-cloud-download" title="recv"></i>
+          <button id="msg-recv-clear" type="button" class="btn btn-primary pull-right">Clear</button>
+          <button id="msg-recv-scroll" type="button" class="btn btn-primary pull-right active" data-toggle="button">Scroll</button>
+        </div>
+
+        <div id="msg-recv-log" class="row">
+          <ol>
+          </ol>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- settings -->
+
+    <div id="settings" class="modal fade" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title">Settings</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Signaling</label>
+                        <input class="form-control" id="settings-signaling-server-url" placeholder="url">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="settings-defaults" class="btn btn-default">Defaults</button>
+                    <button type="button" id="settings-cancel" class="btn btn-danger btn-default" data-dismiss="modal">Cancel</button>
+                    <button type="button" id="settings-save" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- code -->
+
+    <script type="text/javascript" src="js/demo.js"></script>
+</body>
+
+</html>

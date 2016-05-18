@@ -1,4 +1,0 @@
-string session_id
-string peer_id
----
-ros_webrtc/Session session
