@@ -13,6 +13,8 @@ class SignalClient(WebSocketClient):
         self.handler = kwargs.pop('handler')
         super(SignalClient, self).__init__(*args, **kwargs)
         self._map = {
+            'connect': self.handler.on_connect,
+            'disconnect': self.handler.on_disconnect,
             'call': self.handler.on_call,
             'pickup': self.handler.on_pickup,
             'add_ice_candidate': self.handler.on_add_ice_candidate,
@@ -67,6 +69,12 @@ class DropSignal(Exception):
 
 
 class SignalHandler(object):
+
+    def on_connect(self, channel, session, payload):
+        pass
+
+    def on_disconnect(self, channel, session, payload):
+        pass
 
     def on_call(self, channel, session, payload):
         pass
