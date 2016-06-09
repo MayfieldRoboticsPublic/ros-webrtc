@@ -88,10 +88,11 @@ set that when launching:
 This all leaves you with a few `ros_webrtc` nodes:
 
 ```bash
-~/tmp/ros-webrtc-ws$ rosnode list /ros_webrtc
-/ros_webrtc/example
+~/tmp/ros-webrtc-ws$ rosnode list
 /ros_webrtc/host
-/ros_webrtc/signaling
+/ros_webrtc_example/example
+/ros_webrtc_example/signaling
+/rosout
 ```
 
 ### /ros_webrtc/host
@@ -130,7 +131,7 @@ string[] audio_sources
 ---
 ```
 
-### /ros_webrtc/signaling
+### /ros_webrtc_example/signaling
 
 Initiating a peer connection and negotiating how and what to send over it is
 referred to as *signaling* in WebRTC. You can do that anyway you like (e.g. an
@@ -145,7 +146,7 @@ does that and is suitable for testing. The peers (e.g. a browser and a
 Just as the browser [RTCPeerConnection](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection)
 has no knowledge of signaling, neither does `ros_webrtc_host`.
 
-### /ros_webrtc/example
+### /ros_webrtc_example/example
 
 A `ros_webrtc_example` ROS node intended to show how ROS WebRTC app *might*
 be implemented using helpers from the `ros_webrtc` Python library.

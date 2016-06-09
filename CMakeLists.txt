@@ -19,7 +19,9 @@ find_package(PkgConfig REQUIRED COMPONENTS system)
 find_package(OpenCV)
 
 ## System dependencies also found via PkgConfig's conventions
-pkg_check_modules(jingle REQUIRED libjingle)
+set(LIBJINGLE_VER "a4ef2ce" CACHE STRING "libjingle version.")
+pkg_check_modules(jingle REQUIRED libjingle${LIBJINGLE_VER})
+set(jingle_STATIC_LDFLAGS "-l:libjingle.a ${jingle_STATIC_LDFLAGS}")
 pkg_check_modules(jsoncpp REQUIRED jsoncpp)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
