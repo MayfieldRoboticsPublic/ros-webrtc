@@ -3,9 +3,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv/cv.hpp>
 #include <sensor_msgs/Image.h>
-#include <talk/media/webrtc/webrtcvideocapturer.h>
-#include <webrtc/modules/video_capture/include/video_capture_factory.h>
-#include <webrtc/system_wrappers/interface/ref_count.h>
+#include <webrtc/media/engine/webrtcvideocapturer.h>
+#include <webrtc/modules/video_capture/video_capture_factory.h>
 
 // VideoCaptureModuleRegistry
 
@@ -97,31 +96,6 @@ int32_t ROSVideoCaptureModule::init(const char* deviceUniqueIdUTF8) {
     return 0;
 }
 
-bool ROSVideoCaptureModule::_capture_thread(void* obj) {
-    return static_cast<ROSVideoCaptureModule*>(obj)->_capture_poll();
-}
-
-bool ROSVideoCaptureModule::_capture_poll() {
-    {
-        // lock
-        webrtc::CriticalSectionScoped cs(_capture_cs);
-        if (!_capturing)
-            return false;
-
-        // poll
-        ros::CallbackQueue::CallOneResult result = ros::CallbackQueue::TryAgain;
-        while (result == ros::CallbackQueue::TryAgain) {
-            // NOTE: handler is ROSVideoCaptureModule::_image_callback
-            result = _image_q.callOne();
-        }
-        if (result != ros::CallbackQueue::Called)
-            return true;
-    }
-
-    usleep(0);  // yield
-    return true;
-}
-
 void ROSVideoCaptureModule::_image_callback(const sensor_msgs::ImageConstPtr& msg) {
     // force to bgr8
     cv::Mat bgr = cv_bridge::toCvShare(msg, "bgr8")->image;
@@ -142,10 +116,9 @@ void ROSVideoCaptureModule::_image_callback(const sensor_msgs::ImageConstPtr& ms
     IncomingFrame(yuv.data, yuv.rows * yuv.step, _capability, msg->header.stamp.toNSec());
 }
 
-webrtc::VideoCaptureModule* ROSVideoCaptureModule::Create(const int32_t id, const char* deviceUniqueIdUTF8) {
-    webrtc::RefCountImpl<ROSVideoCaptureModule>* obj = new webrtc::RefCountImpl<ROSVideoCaptureModule>(id);
+rtc::scoped_refptr<webrtc::VideoCaptureModule> ROSVideoCaptureModule::Create(const int32_t id, const char* deviceUniqueIdUTF8) {
+    rtc::scoped_refptr<ROSVideoCaptureModule> obj = new rtc::RefCountedObject<ROSVideoCaptureModule>(id);
     if (!obj || obj->init(deviceUniqueIdUTF8) != 0) {
-        delete obj;
         obj = NULL;
     }
     return obj;
@@ -170,16 +143,13 @@ int32_t ROSVideoCaptureModule::StartCapture(const webrtc::VideoCaptureCapability
 
     webrtc::CriticalSectionScoped cs(_capture_cs);
 
-    //start capture thread;
+    // start capture thread
     if (_capture_thd == NULL) {
-        _capture_thd = webrtc::ThreadWrapper::CreateThread(
-            ROSVideoCaptureModule::_capture_thread, this, webrtc::kHighPriority
-        );
+        _capture_thd = new CaptureThread(*this);
         if (_capture_thd == NULL) {
             return -1;
         }
-        unsigned int id;
-        _capture_thd->Start(id);
+        _capture_thd->Start();
     }
 
     // done
@@ -191,14 +161,11 @@ int32_t ROSVideoCaptureModule::StartCapture(const webrtc::VideoCaptureCapability
 
 int32_t ROSVideoCaptureModule::StopCapture() {
     if (_capture_thd != NULL) {
-        if (_capture_thd->Stop()) {
-            delete _capture_thd;
-            _capture_thd = NULL;
-        } else {
-            ROS_ERROR("could not stop capture thread, leaking it ...");
-            assert(false);
-            _capture_thd = NULL;
-        }
+        ROS_INFO("stopping capture thread ...");
+        _capture_thd->Stop();
+        ROS_INFO("stopped capture thread");
+        delete _capture_thd;
+        _capture_thd = NULL;
     }
 
     {
@@ -221,9 +188,76 @@ int32_t ROSVideoCaptureModule::CaptureSettings(webrtc::VideoCaptureCapability& s
     return 0;
 }
 
-// ROSVideoCaptureTopicInfo
+// ROSVideoCaptureModule::CaptureThread
 
-ROSVideoCaptureTopicInfo ROSVideoCaptureTopicInfo::scan() {
+ROSVideoCaptureModule::CaptureThread::CaptureThread(
+    ROSVideoCaptureModule &parent) : _parent(parent) {
+}
+
+ROSVideoCaptureModule::CaptureThread::~CaptureThread() {
+    Stop();
+}
+void ROSVideoCaptureModule::CaptureThread::Run() {
+    ros::CallbackQueue::CallOneResult result = ros::CallbackQueue::TryAgain;
+
+    while(true) {
+        {
+            // lock
+            webrtc::CriticalSectionScoped cs(_parent._capture_cs);
+            if (!_parent._capturing)
+                break;
+
+            // poll
+            do {
+                // NOTE: handler is ROSVideoCaptureModule::_image_callback
+                result = _parent._image_q.callOne();
+            } while (result == ros::CallbackQueue::TryAgain);
+        }
+
+        if (result == ros::CallbackQueue::Called) {
+            if (!ProcessMessages(0)) {
+                break;
+            }
+        } else {
+            usleep(0);  // yield
+        }
+    }
+}
+
+// WebRTCVideoCaptureDevices
+
+void WebRTCVideoCaptureDeviceInfo::scan(std::vector<WebRTCVideoCaptureDeviceInfo> &infos) {
+    std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> dev_info(
+        webrtc::VideoCaptureFactory::CreateDeviceInfo(0)
+    );
+    auto nb_device = dev_info->NumberOfDevices();
+    for (auto i = 0; i < nb_device; i += 1) {
+        char file_id[1024] = {0};
+        char name[1024] = {0};
+        char unique_id[1024] = {0};
+        char product_id[1024] = {0};
+        auto rc = dev_info->GetDeviceName(
+            i,
+            name, sizeof(name),
+            unique_id, sizeof(unique_id),
+            product_id, sizeof(product_id)
+        );
+        if (rc != 0) {
+            continue;
+        }
+        sprintf(file_id, "/dev/video%d", i);
+        infos.push_back({
+            name,
+            file_id,
+            unique_id,
+            product_id
+        });
+    }
+}
+
+// ROSVideoCaptureTopics
+
+ROSVideoCaptureTopics ROSVideoCaptureTopics::scan() {
     std::vector<ros::master::TopicInfo> topics;
     ros::master::V_TopicInfo candidates;
     if (!ros::master::getTopics(candidates)) {
@@ -239,22 +273,22 @@ ROSVideoCaptureTopicInfo ROSVideoCaptureTopicInfo::scan() {
         );
         topics.push_back(topic);
     }
-    return ROSVideoCaptureTopicInfo(topics);
+    return ROSVideoCaptureTopics(topics);
 }
 
-ROSVideoCaptureTopicInfo::ROSVideoCaptureTopicInfo() {
+ROSVideoCaptureTopics::ROSVideoCaptureTopics() {
 }
 
-ROSVideoCaptureTopicInfo::ROSVideoCaptureTopicInfo(
+ROSVideoCaptureTopics::ROSVideoCaptureTopics(
     const std::vector<ros::master::TopicInfo> &values
     ) : _values(values) {
 }
 
-void ROSVideoCaptureTopicInfo::add(const std::string& name) {
+void ROSVideoCaptureTopics::add(const std::string& name) {
     _values.push_back(ros::master::TopicInfo(name, "sensor_msgs/Image"));
 }
 
-int ROSVideoCaptureTopicInfo::find(const std::string& name) const {
+int ROSVideoCaptureTopics::find(const std::string& name) const {
     for (size_t i = 0; i != _values.size(); i++) {
         if (_values[i].name == name) {
             return i;
@@ -271,7 +305,7 @@ ROSVideoCaptureDeviceInfo::ROSVideoCaptureDeviceInfo(const int32_t id) : DeviceI
 ROSVideoCaptureDeviceInfo::~ROSVideoCaptureDeviceInfo() {
 }
 
-bool ROSVideoCaptureDeviceInfo::init(ROSVideoCaptureTopicInfoConstPtr topics) {
+bool ROSVideoCaptureDeviceInfo::init(ROSVideoCaptureTopicsConstPtr topics) {
     _topics = topics;
     return true;
 }
@@ -382,6 +416,66 @@ int32_t ROSVideoCaptureDeviceInfo::Init() {
     return 0;  // do nothing
 }
 
+// ROSWebRtcVcmFactory
+
+/**
+ * \brief Factory for exposing ROS video capture module and devices to cricket::WebRtcVideoCapturer.
+ */
+class ROSWebRtcVcmFactory : public cricket::WebRtcVcmFactoryInterface {
+
+public:
+
+    ROSWebRtcVcmFactory(
+        const cricket::Device &device,
+        ROSVideoCaptureTopicsConstPtr topics,
+        VideoCaptureModuleRegistryPtr module_reg) :
+            _device_id(device.id),
+            _topics(topics),
+            _module_reg(module_reg) {
+    }
+
+    virtual ~ROSWebRtcVcmFactory() {}
+
+private:
+
+    std::string _device_id;
+    ROSVideoCaptureTopicsConstPtr _topics;
+    VideoCaptureModuleRegistryPtr _module_reg;
+
+// cricket::WebRtcVcmFactoryInterface
+
+public:
+
+    virtual rtc::scoped_refptr<webrtc::VideoCaptureModule> Create(int id, const char* device) {
+        rtc::scoped_refptr<webrtc::VideoCaptureModule> module(
+            ROSVideoCaptureModule::Create(id, device)
+        );
+        if (_module_reg != NULL) {
+            _module_reg->add(_device_id, module.get());
+        }
+        return module;
+    }
+
+    virtual webrtc::VideoCaptureModule::DeviceInfo* CreateDeviceInfo(int id) {
+        std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> devices(
+            ROSVideoCaptureModule::CreateDeviceInfo(id)
+        );
+        if (devices.get() == NULL)
+            return NULL;
+        // HACK: need to customize initialization of ROSVideoCaptureDeviceInfo
+        if (!dynamic_cast<ROSVideoCaptureDeviceInfo *>(devices.get())->init(_topics))
+            return NULL;
+        return devices.release();
+    }
+
+    virtual void DestroyDeviceInfo(webrtc::VideoCaptureModule::DeviceInfo* info) {
+        if (info) {
+            delete info;
+        }
+    }
+
+};
+
 // WebRtcVcmFactory
 
 /**
@@ -407,14 +501,14 @@ private:
 
 public:
 
-    virtual webrtc::VideoCaptureModule* Create(int id, const char* device) {
+    virtual rtc::scoped_refptr<webrtc::VideoCaptureModule> Create(int id, const char* device) {
         rtc::scoped_refptr<webrtc::VideoCaptureModule> module(
             webrtc::VideoCaptureFactory::Create(id, device)
         );
         if (_module_reg != NULL) {
             _module_reg->add(_device_id, module.get());
         }
-        return module.release();
+        return module;
     }
 
     virtual webrtc::VideoCaptureModule::DeviceInfo* CreateDeviceInfo(int id) {
@@ -427,15 +521,36 @@ public:
 
 };
 
-// WebRtcVideoDeviceCapturerFactory
+// ROSVideoDeviceCapturerFactor
 
-WebRtcVideoDeviceCapturerFactory ::WebRtcVideoDeviceCapturerFactory (
+ROSVideoDeviceCapturerFactory::ROSVideoDeviceCapturerFactory (
+    VideoCaptureModuleRegistryPtr module_reg,
+    ROSVideoCaptureTopicsConstPtr topics) :
+        _topics(topics),
+        _module_reg(module_reg) {
+}
+
+cricket::VideoCapturer* ROSVideoDeviceCapturerFactory::Create(const cricket::Device& device) {
+    std::unique_ptr<cricket::WebRtcVideoCapturer> capturer(
+        new cricket::WebRtcVideoCapturer(
+            new ROSWebRtcVcmFactory(device, _topics, _module_reg)
+        )
+    );
+    if (!capturer->Init(device)) {
+        return NULL;
+    }
+    return capturer.release();
+}
+
+// WebRTCVideoDeviceCapturerFactory
+
+WebRTCVideoDeviceCapturerFactory::WebRTCVideoDeviceCapturerFactory (
     VideoCaptureModuleRegistryPtr module_reg) :
         _module_reg(module_reg) {
 };
 
-cricket::VideoCapturer* WebRtcVideoDeviceCapturerFactory ::Create(const cricket::Device& device) {
-    rtc::scoped_ptr<cricket::WebRtcVideoCapturer> capturer(
+cricket::VideoCapturer* WebRTCVideoDeviceCapturerFactory::Create(const cricket::Device& device) {
+    std::unique_ptr<cricket::WebRtcVideoCapturer> capturer(
         new cricket::WebRtcVideoCapturer(new WebRtcVcmFactory(
             device, _module_reg
         ))

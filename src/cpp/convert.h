@@ -2,7 +2,7 @@
 #define ROS_WEBRTC_CONVERT_H_
 
 #include <ros_webrtc/Track.h>
-#include <talk/app/webrtc/peerconnectioninterface.h>
+#include <webrtc/api/peerconnectioninterface.h>
 
 ros_webrtc::Track to_ros(const webrtc::MediaStreamTrackInterface *src);
 

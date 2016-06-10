@@ -2,6 +2,7 @@
 #define ROS_WEBRTC_PEER_CONNECTION_H_
 
 #include <list>
+#include <memory>
 
 #include <boost/shared_ptr.hpp>
 #include <bondcpp/bond.h>
@@ -9,10 +10,9 @@
 #include <ros_webrtc/DataChannel.h>
 #include <ros_webrtc/Data.h>
 #include <ros_webrtc/PeerConnection.h>
-#include <talk/app/webrtc/mediaconstraintsinterface.h>
-#include <talk/app/webrtc/peerconnectioninterface.h>
-#include <talk/app/webrtc/videosourceinterface.h>
-#include <webrtc/base/scoped_ptr.h>
+#include <webrtc/api/mediaconstraintsinterface.h>
+#include <webrtc/api/peerconnectioninterface.h>
+#include <webrtc/media/base/videosourceinterface.h>
 #include <webrtc/base/refcount.h>
 #include <webrtc/base/scoped_ref_ptr.h>
 
@@ -93,7 +93,7 @@ public:
 
         VideoSource(
             const std::string& label,
-            webrtc::VideoSourceInterface *interface,
+            webrtc::VideoTrackSourceInterface *interface,
             bool publish = false
         );
 
@@ -101,7 +101,7 @@ public:
 
         bool publish;
 
-        rtc::scoped_refptr<webrtc::VideoSourceInterface> interface;
+        rtc::scoped_refptr<webrtc::VideoTrackSourceInterface> interface;
 
     };
 
@@ -394,7 +394,7 @@ private:
 
     bool _is_offerer;
 
-    rtc::scoped_ptr<webrtc::SessionDescriptionInterface> _local_desc;
+    std::unique_ptr<webrtc::SessionDescriptionInterface> _local_desc;
 
     bool _queue_remote_ice_candidates;
 

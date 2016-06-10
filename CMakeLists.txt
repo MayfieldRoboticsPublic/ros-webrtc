@@ -19,7 +19,7 @@ find_package(PkgConfig REQUIRED COMPONENTS system)
 find_package(OpenCV)
 
 ## System dependencies also found via PkgConfig's conventions
-set(LIBJINGLE_VER "a4ef2ce" CACHE STRING "libjingle version.")
+set(LIBJINGLE_VER "555cfe9" CACHE STRING "libjingle version.")
 pkg_check_modules(jingle REQUIRED libjingle${LIBJINGLE_VER})
 set(jingle_STATIC_LDFLAGS "-l:libjingle.a ${jingle_STATIC_LDFLAGS}")
 pkg_check_modules(jsoncpp REQUIRED jsoncpp)
@@ -167,7 +167,6 @@ add_executable(ros_webrtc_host
    src/cpp/media_constraints.cpp
    src/cpp/media_type.cpp
    src/cpp/renderer.cpp
-   src/cpp/device_manager.cpp
    src/cpp/video_capture.cpp
    src/cpp/peer_connection.cpp
    src/cpp/util.cpp

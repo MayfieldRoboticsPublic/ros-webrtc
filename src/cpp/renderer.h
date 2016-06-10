@@ -8,9 +8,10 @@
 #include <ros_webrtc/Audio.h>
 #include <ros_webrtc/Data.h>
 #include <sensor_msgs/Image.h>
-#include <talk/app/webrtc/mediastreaminterface.h>
-#include <talk/app/webrtc/datachannelinterface.h>
+#include <webrtc/api/mediastreaminterface.h>
+#include <webrtc/api/datachannelinterface.h>
 #include <webrtc/base/scoped_ref_ptr.h>
+#include <webrtc/media/base/videosinkinterface.h>
 
 class AudioSink : public webrtc::AudioTrackSinkInterface {
 
@@ -41,15 +42,15 @@ public:
         const void* audio_data,
         int bits_per_sample,
         int sample_rate,
-        int number_of_channels,
-        int number_of_frames
+        size_t number_of_channels,
+        size_t number_of_frames
     );
 
 };
 
 typedef boost::shared_ptr<AudioSink> AudioSinkPtr;
 
-class VideoRenderer : public webrtc::VideoRendererInterface {
+class VideoRenderer : public rtc::VideoSinkInterface<cricket::VideoFrame> {
 
 public:
 
@@ -72,13 +73,11 @@ private:
 
     sensor_msgs::Image _msg;
 
-// webrtc::VideoRendererInterface
+// rtc::VideoSinkInterface<cricket::VideoFrame>
 
 public:
 
-    virtual void SetSize(int width, int height);
-
-    virtual void RenderFrame(const cricket::VideoFrame* frame);
+    virtual void OnFrame(const cricket::VideoFrame& frame);
 
 };
 

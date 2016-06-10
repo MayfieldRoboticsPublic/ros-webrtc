@@ -6,7 +6,7 @@
     
     ros_webrtc_src_dir: "{{ playbook_dir }}/../../"
     
-    webrtc_version: a4ef2ce
+    webrtc_version: 555cfe9
     webrtc_install_bin: yes
     webrtc_install_dev: yes
     webrtc_install_dbg: yes

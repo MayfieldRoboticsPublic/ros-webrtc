@@ -18,7 +18,7 @@
 #include <ros_webrtc/OnSetSessionDescription.h>
 #include <ros_webrtc/OnSignalingStateChange.h>
 #include <std_msgs/Empty.h>
-#include <talk/app/webrtc/jsepicecandidate.h>
+#include <webrtc/api/jsepicecandidate.h>
 
 #include "convert.h"
 #include "host.h"
@@ -200,12 +200,14 @@ bool PeerConnection::is_offerer() const {
 
 void PeerConnection::add_ice_candidate(webrtc::IceCandidateInterface* candidate) {
     if (_queue_remote_ice_candidates) {
+        // FIXME: capture and log error
         std::string sdp;
         candidate->ToString(&sdp);
         IceCandidatePtr copy(webrtc::CreateIceCandidate(
             candidate->sdp_mid(),
             candidate->sdp_mline_index(),
-            sdp
+            sdp,
+            NULL
         ));
         _remote_ice_cadidates.push_back(copy);
     } else {
@@ -456,7 +458,7 @@ void PeerConnection::_drain_remote_ice_candidates() {
 
 PeerConnection::VideoSource::VideoSource(
     const std::string& label,
-    webrtc::VideoSourceInterface *interface,
+    webrtc::VideoTrackSourceInterface *interface,
     bool publish) :
     label(label),
     interface(interface),
@@ -736,10 +738,15 @@ void PeerConnection::CreateSessionDescriptionObserver::OnSuccess(webrtc::Session
     }
     std::string sdp;
     desc->ToString(&sdp);
-    instance._local_desc.reset(webrtc::CreateSessionDescription(desc->type(), sdp));
+    // FIXME: capture and log errors
+    instance._local_desc.reset(webrtc::CreateSessionDescription(desc->type(), sdp, NULL));
     if (instance._pc != NULL) {
         ROS_INFO_STREAM("setting local sdp, type - " << desc->type());
-        instance._pc->SetLocalDescription(instance._ssdo, webrtc::CreateSessionDescription(desc->type(), sdp));
+        instance._pc->SetLocalDescription(
+            instance._ssdo,
+            // FIXME: capture and log errors
+            webrtc::CreateSessionDescription(desc->type(), sdp, NULL)
+        );
     }
 }
 

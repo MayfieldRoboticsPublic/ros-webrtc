@@ -2,7 +2,7 @@
 #define ROS_WEBRTC_MEDIA_CONSTRAINTS_H_
 
 #include <ros_webrtc/MediaConstraints.h>
-#include <talk/app/webrtc/mediaconstraintsinterface.h>
+#include <webrtc/api/mediaconstraintsinterface.h>
 
 /**
  * @class MediaConstraints

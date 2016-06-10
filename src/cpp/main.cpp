@@ -2,7 +2,7 @@
 
 #include <ros/ros.h>
 #include <webrtc/base/ssladapter.h>
-#include <webrtc/system_wrappers/interface/trace.h>
+#include <webrtc/system_wrappers/include/trace.h>
 
 #include "config.h"
 #include "host.h"

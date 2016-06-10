@@ -1,6 +1,8 @@
 #ifndef ROS_WEBRTC_HOST_H_
 #define ROS_WEBRTC_HOST_H_
 
+#include <memory>
+
 #include <ros/callback_queue_interface.h>
 #include <ros_webrtc/AddIceCandidate.h>
 #include <ros_webrtc/CreateDataChannel.h>
@@ -12,7 +14,7 @@
 #include <ros_webrtc/RotateVideoSource.h>
 #include <ros_webrtc/SendData.h>
 #include <ros_webrtc/SetRemoteDescription.h>
-#include <talk/app/webrtc/peerconnectioninterface.h>
+#include <webrtc/api/peerconnectioninterface.h>
 
 #include "media_constraints.h"
 #include "peer_connection.h"
@@ -52,7 +54,9 @@ struct VideoSource {
 
     int rotation;
 
-    rtc::scoped_refptr<webrtc::VideoSourceInterface> interface;
+    rtc::scoped_refptr<webrtc::VideoTrackSourceInterface> interface;
+
+    rtc::scoped_refptr<webrtc::VideoCaptureModule> capture_module;
 
     VideoRendererPtr renderer;
 
@@ -261,9 +265,11 @@ private:
 
     QueueSizes _queue_sizes;
 
-    rtc::scoped_ptr<rtc::Thread> _signaling_thd;
+    std::unique_ptr<rtc::Thread> _network_thd;
 
-    rtc::scoped_ptr<rtc::Thread> _worker_thd;
+    std::unique_ptr<rtc::Thread> _signaling_thd;
+
+    std::unique_ptr<rtc::Thread> _worker_thd;
 
     rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> _pc_factory;
 

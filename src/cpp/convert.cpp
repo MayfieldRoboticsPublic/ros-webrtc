@@ -5,17 +5,11 @@ ros_webrtc::Track to_ros(const webrtc::MediaStreamTrackInterface* src) {
     dst.kind = src->kind();
     dst.id = src->id();
     switch (src->state()) {
-        case webrtc::MediaStreamTrackInterface::TrackState::kInitializing:
-            dst.state = "initializing";
-            break;
         case webrtc::MediaStreamTrackInterface::TrackState::kLive:
             dst.state = "live";
             break;
         case webrtc::MediaStreamTrackInterface::TrackState::kEnded:
             dst.state = "ended";
-            break;
-        case webrtc::MediaStreamTrackInterface::TrackState::kFailed:
-            dst.state = "failed";
             break;
     }
     dst.enabled = src->enabled();

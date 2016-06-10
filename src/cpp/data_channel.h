@@ -4,8 +4,8 @@
 #include <ros/ros.h>
 #include <ros_webrtc/Data.h>
 #include <ros_webrtc/DataChannel.h>
-#include <talk/app/webrtc/datachannelinterface.h>
-#include <webrtc/base/scoped_ptr.h>
+#include <webrtc/api/datachannelinterface.h>
+#include <webrtc/base/scoped_ref_ptr.h>
 
 #include "media_type.h"
 #include "renderer.h"
