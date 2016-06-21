@@ -8,30 +8,6 @@
   - python-opencv
   become: yes
 
-- name: check if libjingle-dev installed
-  command: "dpkg-query -W -f='${Version}' libjingle-dev"
-  register: libjingle_dev_check
-  failed_when: libjingle_dev_check.rc != 0 and 'no packages found matching libjingle-dev' not in libjingle_dev_check.stderr
-  changed_when: "libjingle_dev_check.rc != 0 or libjingle_dev_check.stdout != '{{ ros_webrtc_libjingle_version }}{{ ros_webrtc_libjingle_build }}-{{ ros_webrtc_libjingle_iteration }}'"
-
-- name: download libjingle-dev package
-  get_url:
-    url: "https://s3-us-west-1.amazonaws.com/{{ ros_webrtc_libjingle_bucket }}/libjingle-dev_{{ ros_webrtc_libjingle_version }}{{ ros_webrtc_libjingle_build }}-{{ ros_webrtc_libjingle_iteration }}_{{ ros_webrtc_libjingle_arch }}.deb"
-    dest: "/tmp/libjingle-dev_{{ ros_webrtc_libjingle_version }}{{ ros_webrtc_libjingle_build }}-{{ ros_webrtc_libjingle_iteration }}_{{ ros_webrtc_libjingle_arch }}.deb"
-    sha256sum: "{{ ros_webrtc_libjingle_sha256sum }}"
-  register: ros_webrtc_libjingle_dev_download
-  when: libjingle_dev_check|changed
-
-- name: uninstall conflicting libjingle-dev package
-  command: dpkg -r libjingle-dev
-  when: libjingle_dev_check|changed and libjingle_dev_check.rc == 0
-  become: yes
-
-- name: install libjingle
-  command: "dpkg -i /tmp/libjingle-dev_{{ ros_webrtc_libjingle_version }}{{ ros_webrtc_libjingle_build }}-{{ ros_webrtc_libjingle_iteration }}_{{ ros_webrtc_libjingle_arch }}.deb"
-  when: libjingle_dev_check|changed
-  become: yes
-
 - name: install python packages
   pip: name={{ item }}
   with_items:
