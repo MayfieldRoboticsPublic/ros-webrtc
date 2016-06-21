@@ -1,13 +1,10 @@
 #include "host.h"
 
-#include <talk/app/webrtc/peerconnectioninterface.h>
-#include <talk/app/webrtc/videosourceinterface.h>
-#include <talk/media/devices/devicemanager.h>
-#include <talk/media/webrtc/webrtcvideoencoderfactory.h>
-#include <talk/media/webrtc/webrtcvideodecoderfactory.h>
+#include <webrtc/api/peerconnectioninterface.h>
+#include <webrtc/media/base/videosourceinterface.h>
+#include <webrtc/media/engine/webrtcvideoencoderfactory.h>
 
 #include "convert.h"
-#include "device_manager.h"
 #include "host.h"
 #include "util.h"
 
@@ -241,17 +238,23 @@ Host::FlushStats Host::flush() {
 }
 
 bool Host::_create_pc_factory() {
-    ROS_INFO_STREAM("creating worker thread");
-    _worker_thd.reset(new rtc::Thread());
-    _worker_thd->SetName("worker_thread", NULL);
+    _network_thd = rtc::Thread::CreateWithSocketServer();
+    _network_thd->SetName("network_thread", nullptr);
+    if (!_network_thd->Start()) {
+        ROS_DEBUG_STREAM("network thread failed to start");
+        close();
+        return false;
+    }
+
+    _worker_thd = rtc::Thread::Create();
+    _worker_thd->SetName("worker_thread", nullptr);
     if (!_worker_thd->Start()) {
         ROS_DEBUG_STREAM("worker thread failed to start");
         close();
         return false;
     }
 
-    ROS_INFO_STREAM("creating signaling thread");
-    _signaling_thd.reset(new rtc::Thread());
+    _signaling_thd = rtc::Thread::Create();
     _signaling_thd->SetName("signaling_thread", NULL);
     if (!_signaling_thd->Start()) {
         ROS_DEBUG_STREAM("signaling thread failed to start");
@@ -260,14 +263,13 @@ bool Host::_create_pc_factory() {
     }
 
     ROS_INFO_STREAM("creating pc factory");
-    rtc::scoped_ptr<cricket::WebRtcVideoEncoderFactory> encoder_factory;
-    rtc::scoped_ptr<cricket::WebRtcVideoDecoderFactory> decoder_factory;
     _pc_factory =  webrtc::CreatePeerConnectionFactory(
+        _network_thd.get(),
         _worker_thd.get(),
         _signaling_thd.get(),
         NULL,
-        encoder_factory.release(),
-        decoder_factory.release()
+        NULL,
+        NULL
     );
     if (!_pc_factory.get()) {
         ROS_DEBUG_STREAM("failed peer-connection factory create");
@@ -279,34 +281,6 @@ bool Host::_create_pc_factory() {
 }
 
 bool Host::_open_media() {
-    ROS_DEBUG_STREAM("creating system device manager");
-    rtc::scoped_ptr<cricket::DeviceManagerInterface> default_dev_mgr(
-        cricket::DeviceManagerFactory::Create()
-    );
-    if (!default_dev_mgr->Init()) {
-        ROS_ERROR_STREAM("cannot create default device manager");
-        return false;
-    }
-    default_dev_mgr->SetVideoDeviceCapturerFactory(
-        new WebRtcVideoDeviceCapturerFactory(_video_capture_modules)
-    );
-
-    ROS_DEBUG_STREAM("creating ros device manager");
-    ROSVideoCaptureTopicInfoPtr video_capture_topics(new ROSVideoCaptureTopicInfo());
-    for (size_t i = 0; i != _video_srcs.size(); i++) {
-        VideoSource& video_src = _video_srcs[i];
-        if (video_src.type != VideoSource::ROSType)
-            continue;
-        video_capture_topics->add(video_src.name);
-    }
-    rtc::scoped_ptr<cricket::DeviceManagerInterface> ros_dev_mgr(
-        new ROSDeviceManager(video_capture_topics, _video_capture_modules)
-    );
-    if (!ros_dev_mgr->Init()) {
-        ROS_ERROR_STREAM("cannot create ros device manager");
-        return false;
-    }
-
     // audio source
     _audio_src.interface = _pc_factory->CreateAudioSource(&_audio_src.constraints);
     if(_audio_src.interface == NULL) {
@@ -343,59 +317,106 @@ bool Host::_open_media() {
     }
 
     // video sources
+    ROS_DEBUG_STREAM("system video capture devices");
+    std::vector<WebRTCVideoCaptureDeviceInfo> webrtc_video_capture_devices;
+    WebRTCVideoCaptureDeviceInfo::scan(webrtc_video_capture_devices);
+    ROS_DEBUG_STREAM("ros video capture topics");
+    ROSVideoCaptureTopicsPtr ros_video_capture_topics(new ROSVideoCaptureTopics());
+    for (size_t i = 0; i != _video_srcs.size(); i++) {
+        VideoSource& video_src = _video_srcs[i];
+        if (video_src.type != VideoSource::ROSType)
+            continue;
+        ros_video_capture_topics->add(video_src.name);
+    }
+    WebRTCVideoDeviceCapturerFactory webrtc_video_capturer_factory(
+        _video_capture_modules
+    );
+    ROSVideoDeviceCapturerFactory ros_video_capturer_factory(
+        _video_capture_modules,
+        ros_video_capture_topics
+    );
+    cricket::WebRtcVideoDeviceCapturerFactory *video_capturer_factory = NULL;
     for (size_t i = 0; i != _video_srcs.size(); i++) {
         VideoSource& video_src = _video_srcs[i];
 
-        // device manager
-        cricket::DeviceManagerInterface *dev_mgr = NULL;
+        // capturer
+        cricket::VideoDeviceCapturerFactory *video_capturer_factory = NULL;
+        cricket::Device device;
         switch (video_src.type) {
-            case VideoSource::NameType:
-            case VideoSource::IdType:
-                dev_mgr = default_dev_mgr.get();
+            case VideoSource::NameType: {
+                auto j = std::find_if(
+                    webrtc_video_capture_devices.begin(),
+                    webrtc_video_capture_devices.end(),
+                    WebRTCVideoCaptureDeviceInfo::find_by_name({video_src.name})
+                );
+                if (j == webrtc_video_capture_devices.end()) {
+                    ROS_ERROR_STREAM(
+                        "no webrtc video capture device w/ name \"" << video_src.name << "\""
+                    );
+                    return false;
+                }
+                device.id = (*j).unique_id;
+                device.name = (*j).name;
+                video_capturer_factory = &webrtc_video_capturer_factory;
                 break;
+            }
+            case VideoSource::IdType: {
+                auto j = std::find_if(
+                    webrtc_video_capture_devices.begin(),
+                    webrtc_video_capture_devices.end(),
+                    WebRTCVideoCaptureDeviceInfo::find_by_file_id({video_src.name})
+                );
+                if (j == webrtc_video_capture_devices.end()) {
+                    ROS_ERROR_STREAM(
+                        "no webrtc video capture device w/ file \"" << video_src.name << "\""
+                    );
+                    return false;
+                }
+                device.id = (*j).unique_id;
+                device.name = (*j).name;
+                video_capturer_factory = &webrtc_video_capturer_factory;
+                break;
+            }
             case VideoSource::ROSType:
-                dev_mgr = ros_dev_mgr.get();
+                if (ros_video_capture_topics->find(video_src.name) == -1) {
+                    ROS_ERROR_STREAM("no id for video src '" << video_src.name << "'");
+                    return false;
+                }
+                device.id = video_src.name;
+                device.name = video_src.name;
+                video_capturer_factory = &ros_video_capturer_factory;
                 break;
             default:
                 ROS_ERROR_STREAM(
-                    "video src '" << video_src.name <<
-                    "' type '" << video_src.type <<
-                    "' not supported."
+                    "video src '" << video_src.name <<"' " <<
+                    "type '" << video_src.type << "' " <<
+                    "not supported."
                 );
                 return false;
         }
-
-        // capturer
-        cricket::Device device;
-        if (video_src.type == VideoSource::IdType) {
-            std::vector<cricket::Device> devs;
-            if (!dev_mgr->GetVideoCaptureDevices(&devs)) {
-                ROS_ERROR("cannot get video capture devices");
-                return false;
-            }
-            for (auto i = devs.begin(); i != devs.end(); i++) {
-                if ((*i).id == video_src.name) {
-                    device = *i;
-                    break;
-                }
-            }
-            if (device.name.empty()) {
-                ROS_ERROR("cannot get video capture device for file '%s'", video_src.name.c_str());
-                return false;
-            }
-        } else if (!dev_mgr->GetVideoCaptureDevice(video_src.name, &device)) {
-            ROS_ERROR("cannot get video capture device for '%s'", video_src.name.c_str());
-            return false;
-        }
-        std::auto_ptr<cricket::VideoCapturer> video_capturer(dev_mgr->CreateVideoCapturer(device));
+        std::unique_ptr<cricket::VideoCapturer> video_capturer(
+            video_capturer_factory->Create(device)
+        );
         if (video_capturer.get() == NULL) {
             ROS_ERROR("failed to create video capture device for '%s'", video_src.name.c_str());
             return false;
         }
+        video_src.capture_module = _video_capture_modules->find(
+            video_capturer->GetId()
+        );
+        if (!video_src.capture_module) {
+            ROS_ERROR_STREAM(
+                "video src '" << video_src.name << "' " <<
+                "capturer id '" << video_capturer->GetId() << "' not registered"
+            );
+            return false;
+        }
 
         // source
-        video_src.interface = _pc_factory->CreateVideoSource(video_capturer.get(), &video_src.constraints);
-        if(video_src.interface.get() == NULL) {
+        video_src.interface = _pc_factory->CreateVideoSource(
+            video_capturer.get(), &video_src.constraints
+        );
+        if(!video_src.interface) {
             ROS_ERROR(
                 "cannot create source '%s' for video capture device '%s'",
                 video_src.label.c_str(), video_src.name.c_str()
@@ -406,43 +427,28 @@ bool Host::_open_media() {
 
         // rotation
         if (video_src.rotation != 0) {
-            rtc::scoped_refptr<webrtc::VideoCaptureModule> vcm(
-                _video_capture_modules->find(
-                   video_src.interface->GetVideoCapturer()->GetId()
-                )
-            );
-            if (vcm == NULL) {
+            webrtc::VideoRotation rotation = webrtc::kVideoRotation_0;
+            switch (video_src.rotation) {
+            case 0:
+                rotation = webrtc::kVideoRotation_0;
+                break;
+            case 90:
+                rotation = webrtc::kVideoRotation_90;
+                break;
+            case 180:
+                rotation = webrtc::kVideoRotation_180;
+                break;
+            case 270:
+                rotation = webrtc::kVideoRotation_270;
+                break;
+            default:
                 ROS_ERROR_STREAM(
-                    "video src '" <<
-                    video_src.name <<
-                    "' capturer id '" <<
-                    video_src.interface->GetVideoCapturer()->GetId() <<
-                    "' not registered"
+                    "invalid rotation " <<
+                    video_src.rotation <<
+                    ", must be one of 0, 90, 180, 270"
                 );
-            } else {
-                webrtc::VideoCaptureRotation rotation = webrtc::kCameraRotate0;
-                switch (video_src.rotation) {
-                case 0:
-                    rotation = webrtc::kCameraRotate0;
-                    break;
-                case 90:
-                    rotation = webrtc::kCameraRotate90;
-                    break;
-                case 180:
-                    rotation = webrtc::kCameraRotate180;
-                    break;
-                case 270:
-                    rotation = webrtc::kCameraRotate270;
-                    break;
-                default:
-                    ROS_ERROR_STREAM(
-                        "invalid rotation " <<
-                        video_src.rotation <<
-                        ", must be one of 0, 90, 180, 270"
-                    );
-                }
-                vcm->SetCaptureRotation(rotation);
             }
+            video_src.capture_module->SetCaptureRotation(rotation);
         }
 
         // track
@@ -548,8 +554,9 @@ bool Host::Service::add_ice_candidate(ros::ServiceEvent<ros_webrtc::AddIceCandid
     PeerConnectionPtr pc = _instance._find_peer_connection(key);
     if (pc == NULL)
         return false;
-    rtc::scoped_ptr<webrtc::IceCandidateInterface> ice_candidate(webrtc::CreateIceCandidate(
-        req.sdp_mid, req.sdp_mline_index, req.candidate
+    // FIXME: detect and log error
+    std::unique_ptr<webrtc::IceCandidateInterface> ice_candidate(webrtc::CreateIceCandidate(
+        req.sdp_mid, req.sdp_mline_index, req.candidate, NULL
     ));
     pc->add_ice_candidate(ice_candidate.get());
     return true;
@@ -728,34 +735,26 @@ bool Host::Service::rotate_video_source(ros::ServiceEvent<ros_webrtc::RotateVide
     }
 
     // capture module
-    rtc::scoped_refptr<webrtc::VideoCaptureModule> vcm(
-        _instance._video_capture_modules->find(
-           video_src.interface->GetVideoCapturer()->GetId()
-        )
-    );
-    if (vcm == NULL) {
+    rtc::scoped_refptr<webrtc::VideoCaptureModule> capture_module = video_src.capture_module;
+    if (!capture_module) {
         ROS_ERROR_STREAM(
-            "video src '" <<
-            video_src.name <<
-            "' capturer id '" <<
-            video_src.interface->GetVideoCapturer()->GetId() <<
-            "' not registered"
+            "video src '" << video_src.name << "' " << "capture module not registered"
         );
         return false;
     }
-    webrtc::VideoCaptureRotation rotation;
+    webrtc::VideoRotation rotation;
     switch (req.rotation) {
     case 0:
-        rotation = webrtc::kCameraRotate0;
+        rotation = webrtc::kVideoRotation_0;
         break;
     case 90:
-        rotation = webrtc::kCameraRotate90;
+        rotation = webrtc::kVideoRotation_90;
         break;
     case 180:
-        rotation = webrtc::kCameraRotate180;
+        rotation = webrtc::kVideoRotation_180;
         break;
     case 270:
-        rotation = webrtc::kCameraRotate270;
+        rotation = webrtc::kVideoRotation_270;
         break;
     default:
         ROS_ERROR_STREAM(
@@ -765,13 +764,9 @@ bool Host::Service::rotate_video_source(ros::ServiceEvent<ros_webrtc::RotateVide
         );
         return false;
     }
-    vcm->SetCaptureRotation(rotation);
+    capture_module->SetCaptureRotation(rotation);
     ROS_INFO_STREAM(
-        "video src '" <<
-        video_src.name <<
-        "' capturer id '" <<
-        video_src.interface->GetVideoCapturer()->GetId() <<
-        "' rotation set to " << req.rotation
+        "video src '" << video_src.name << "' rotation set to " << req.rotation
     );
     video_src.rotation = rotation;
     return true;

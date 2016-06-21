@@ -2,7 +2,7 @@
 #define ROS_WEBRTC_CONFIG_H_
 
 #include <ros/ros.h>
-#include <talk/app/webrtc/peerconnectioninterface.h>
+#include <webrtc/api/peerconnectioninterface.h>
 #include <webrtc/common_types.h>
 
 #include "host.h"

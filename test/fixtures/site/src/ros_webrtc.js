@@ -350,20 +350,6 @@ ros_webrtc.Call = Backbone.Model.extend({
   // peer connection events
 
   _transformOfferSDP: function(sdp) {
-    // http://stackoverflow.com/a/33285172
-    sdp = sdp.replace(/UDP\/TLS\/RTP\/SAVPF/g, 'RTP/SAVPF');
-
-    // https://bugs.chromium.org/p/webrtc/issues/detail?id=3962#c10
-    sdp = sdp.replace(/a=rtpmap:\d+ rtx\/\d+\r\n/gi, '');
-    sdp = sdp.replace(/a=fmtp:\d+ apt=\d+\r\n/gi, '');
-
-    // https://github.com/Peer5/ShareFest/blob/8fcb0c06fc6ab06a1d0ee6b3d734e5832973d972/public/js/peerConnectionImplChrome.js#L202
-    if (webrtcDetectedBrowser == 'chrome') {
-        var split = sdp.split('b=AS:30');
-        if (split.length == 2)
-            sdp = split[0] + 'b=AS:1638400' + split[1];
-    }
-
     return sdp;
   },
 

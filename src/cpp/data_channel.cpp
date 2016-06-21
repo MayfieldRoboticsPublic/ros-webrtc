@@ -19,7 +19,7 @@ struct ChunkedDataTransfer {
 
     const std::string id;
 
-    const rtc::Buffer& data;
+    const rtc::CopyOnWriteBuffer& data;
 
     const size_t size;
 
@@ -37,7 +37,7 @@ ChunkedDataTransfer::ChunkedDataTransfer(
     data(data_buffer.data),
     size(size),
     current(0),
-    total(static_cast<size_t>(std::ceil((double)data.length() / (double)size))) {
+    total(static_cast<size_t>(std::ceil((double)data.size() / (double)size))) {
 }
 
 bool ChunkedDataTransfer::is_complete() const {
@@ -52,14 +52,11 @@ size_t ChunkedDataTransfer::operator()(webrtc::DataChannelInterface* provider) {
     chunk["index"] = static_cast<Json::UInt>(current);
     chunk["total"] = static_cast<Json::UInt>(total);
     chunk["data"] = std::string(
-        &data.data()[0] + current * size,
-        std::min(size, data.length() - current * size)
+        (const char *)(&data.data()[0] + current * size),
+        std::min(size, data.size() - current * size)
     );
     std::string serialized = chunk.toStyledString();
-    webrtc::DataBuffer data_buffer(
-        rtc::Buffer(reinterpret_cast<void *>(&serialized[0]), serialized.size()),
-        false  // NOTE: == utf-8
-    );
+    webrtc::DataBuffer data_buffer(serialized);
     provider->Send(data_buffer);
     bytes += data_buffer.size();
     current++;
@@ -105,7 +102,7 @@ size_t DataChannel::chunk_size() const {
 
 void DataChannel::send(const ros_webrtc::Data& msg) {
     webrtc::DataBuffer data_buffer(
-        rtc::Buffer(&msg.buffer[0], msg.buffer.size()),
+        rtc::CopyOnWriteBuffer(&msg.buffer[0], msg.buffer.size()),
         msg.encoding == "binary"
     );
     send(data_buffer);

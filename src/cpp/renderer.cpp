@@ -2,8 +2,8 @@
 
 #include <json/json.h>
 #include <sensor_msgs/image_encodings.h>
-#include <talk/media/base/videocommon.h>
-#include <talk/media/base/videoframe.h>
+#include <webrtc/media/base/videocommon.h>
+#include <webrtc/media/base/videoframe.h>
 
 // AudioSink
 
@@ -33,9 +33,9 @@ void AudioSink::OnData(
         const void* audio_data,
         int bits_per_sample,
         int sample_rate,
-        int number_of_channels,
-        int number_of_frames) {
-    ROS_INFO_STREAM(
+        size_t number_of_channels,
+        size_t number_of_frames) {
+    ROS_DEBUG_STREAM(
         "audio data -"
         << " bps : " << bits_per_sample
         <<" sample_rate: " << sample_rate
@@ -54,32 +54,37 @@ VideoRenderer::VideoRenderer(
     _video_track(video_track),
     _rpub(nh.advertise<sensor_msgs::Image>(topic, queue_size)) {
     ROS_INFO_STREAM("registering video renderer for '" << topic << "'");
-    _video_track->AddRenderer(this);
+    // FIXME: configure video sink wants?
+    _video_track->AddOrUpdateSink(this, rtc::VideoSinkWants());
     _msg.encoding = sensor_msgs::image_encodings::BGR8;
     _msg.is_bigendian = false;
 }
 
 VideoRenderer::~VideoRenderer() {
     ROS_INFO_STREAM("unregistering video renderer for '" << _rpub.getTopic() << "'");
-    _video_track->RemoveRenderer(this);
+    _video_track->RemoveSink(this);
 }
 
 webrtc::VideoTrackInterface* VideoRenderer::video_track() {
     return _video_track.get();
 }
 
-void VideoRenderer::SetSize(int width, int height) {
-    ROS_INFO_STREAM("video size '" << _rpub.getTopic() << "'- width=" << width << " height=" << height);
-    _msg.height = height;
-    _msg.width = width;
-    _msg.step = width * 3;
-    _msg.data.resize(_msg.step * _msg.height);
-}
-
-void VideoRenderer::RenderFrame(const cricket::VideoFrame* frame) {
+void VideoRenderer::OnFrame(const cricket::VideoFrame& frame) {
+    const cricket::VideoFrame *rf = frame.GetCopyWithRotationApplied();
+    if (_msg.height != rf->height() || _msg.width != rf->width()) {
+        ROS_INFO_STREAM(
+            "video size '" << _rpub.getTopic() << "'- " <<
+            "width=" << rf->width() <<
+            " height=" << rf->height()
+        );
+        _msg.height = rf->height();
+        _msg.width = rf->width();
+        _msg.step = rf->width() * 3;
+        _msg.data.resize(_msg.step * _msg.height);
+    }
     _msg.header.stamp = ros::Time::now();
     _msg.header.seq += 1;
-    frame->ConvertToRgbBuffer(
+    rf->ConvertToRgbBuffer(
         cricket::FOURCC_BGR3,
         &_msg.data[0],
         _msg.data.size(),
@@ -133,15 +138,17 @@ size_t UnchunkedDataObserver::reap() {
 void UnchunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     ROS_DEBUG(
         "data message for '%s' - binary=%s, size=%zu",
-        _dc->label().c_str(), buffer.binary ? "true" : "false", buffer.data.length()
+        _dc->label().c_str(),
+        buffer.binary ? "true" : "false",
+        buffer.data.size()
     );
     ros_webrtc::Data msg;
     msg.label = _dc->label();
     msg.encoding = buffer.binary ? "utf-8" : "binary";
     msg.buffer.insert(
         msg.buffer.end(),
-        buffer.data.data(),
-        buffer.data.data() + buffer.data.length()
+        buffer.data.cdata(),
+        buffer.data.cdata() + buffer.data.size()
     );
     _rpub.publish(msg);
 }
@@ -179,15 +186,15 @@ void ChunkedDataObserver::OnMessage(const webrtc::DataBuffer& buffer) {
     ROS_DEBUG_STREAM(
         "chunked data message for '" << _dc->label() << "' - "
         << "binary=" << buffer.binary << ", "
-        << "size=" << buffer.data.length()
+        << "size=" << buffer.data.size()
     );
 
     // deserialize chunk
     Json::Value chunk;
     Json::Reader reader;
     bool parsingSuccessful = reader.parse(
-        buffer.data.data(),
-        buffer.data.data() + buffer.data.length(),
+        (const char *)buffer.data.cdata(),
+        (const char *)buffer.data.cdata() + buffer.data.size(),
         chunk
     );
     if (!parsingSuccessful) {
