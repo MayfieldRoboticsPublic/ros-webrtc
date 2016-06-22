@@ -7,8 +7,8 @@
 - src: jalessio.ROS
   name: ros
 
-- src: cmprescott.chrome
-  version: 0.2.1
+- src: https://github.com/cmprescott/ansible-role-chrome
+  version: 0ddd8ad7c6f27c729537de0ab388194a4be22c3b
   name: chrome
 
 - src: https://github.com/DrTom/ansible-role-chromedriver.git

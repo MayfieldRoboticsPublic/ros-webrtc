@@ -5,10 +5,3 @@ ros_webrtc_workspace_dir: ~/tmp/ros-webrtc-ws
 
 ros_webrtc_build_type: Debug
 ros_webrtc_coverage: ON
-
-ros_webrtc_libjingle_bucket: ai-libjingle-dev
-ros_webrtc_libjingle_version: 1a4ef2ce
-ros_webrtc_libjingle_build: debug
-ros_webrtc_libjingle_iteration: 1
-ros_webrtc_libjingle_arch: amd64
-ros_webrtc_libjingle_sha256sum: 5cb62f4a6d176c6bd3792ecc5b7feae82c278d7fe401af4261724318639d43e3
