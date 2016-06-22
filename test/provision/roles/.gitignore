@@ -1,5 +1,5 @@
-chrome
-chrome-driver
-nodejs
-ros
-webrtc
+/chrome/
+/chrome-driver/
+/nodejs/
+/ros/
+/webrtc/
