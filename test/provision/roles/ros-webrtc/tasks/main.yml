@@ -1,0 +1,10 @@
+---
+
+- include: deps.yml
+  tags: [ros-webrtc, ros-webrtc-deps]
+
+- include: workspace.yml
+  tags: [ros-webrtc, ros-webrtc-workspace]
+
+- include: test-site.yml
+  tags: [ros-webrtc, ros-webrtc-test-site]

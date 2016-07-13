@@ -1,0 +1,21 @@
+---
+
+- hosts: all
+  vars:
+    chromedriver_version: '2.20'
+    
+    ros_webrtc_src_dir: /vagrant
+    
+    webrtc_version: 555cfe9
+    webrtc_install_bin: yes
+    webrtc_install_dev: yes
+    webrtc_install_dbg: yes
+    webrtc_install_src: no
+  roles:
+  - base
+  - {role: chrome, become: yes}
+  - {role: chrome-driver, become: yes}
+  - nodejs
+  - {role: webrtc, become: yes}
+  - {role: ros, become: yes}
+  - ros-webrtc

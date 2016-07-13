@@ -1,0 +1,42 @@
+language: cpp
+
+python:
+- "2.7"
+
+sudo: required
+
+dist: trusty
+
+notifications:
+  email:
+    recipients:
+    - dev@mayfieldrobotics.com
+    on_success: change
+    on_failure: change
+
+before_install:
+# https://github.com/travis-ci/travis-ci/issues/5326
+- export PATH=$(echo $PATH | tr ':' "\n" | sed '/\/opt\/python/d' | tr "\n" ":" | sed "s|::|:|g")
+
+# http://docs.travis-ci.com/user/gui-and-headless-browsers/#Configuring-xvfb-screen-size-and-more
+- "/sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1024x768x24"
+- "export DISPLAY=:99.0"
+
+install:
+# setup env for ansible travis.yml
+- export TRAVIS_CI_PATH=$(pwd)
+- mkdir ../ros-webrtc-ws
+- export TRAVIS_WS_PATH=$(readlink -f $(pwd)/../ros-webrtc-ws)
+
+# ansible travis.yml
+- cd test/provision
+- sudo pip install "ansible >=2,<3"
+- ansible-galaxy install -r requirements.yml
+- ansible-playbook -i "localhost," -c local travis.yml || true
+
+script:
+- cd $TRAVIS_WS_PATH
+- source devel/setup.bash
+- echo $PYTHONPATH
+- catkin_make run_tests
+- catkin_test_results

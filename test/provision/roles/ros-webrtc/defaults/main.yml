@@ -1,0 +1,7 @@
+---
+
+ros_webrtc_workspace_dir: ~/tmp/ros-webrtc-ws
+#ros_webrtc_src_dir: ~/code/ros-webrtc
+
+ros_webrtc_build_type: Debug
+ros_webrtc_coverage: ON

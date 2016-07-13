@@ -1,6 +1,0 @@
-string session_id
-string peer_id
-string label
-string encoding
-uint8[] buffer
----

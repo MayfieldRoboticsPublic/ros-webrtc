@@ -1,0 +1,6 @@
+string session_id
+string peer_id
+ros_webrtc/MediaConstraints sdp_constraints
+string[] video_sources
+string[] audio_sources
+---

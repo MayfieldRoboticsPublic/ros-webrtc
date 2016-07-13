@@ -1,0 +1,53 @@
+---
+
+- name: install apt packages
+  apt: name={{ item }} state=present
+  with_items:
+  - xvfb
+  - python-numpy
+  - python-opencv
+  become: yes
+
+- name: install python packages
+  pip: name={{ item }}
+  with_items:
+  - ipython
+  - ipdb
+  # http://stackoverflow.com/a/29202163
+  - requests[security]
+  - ws4py
+  - xvfbwrapper
+  - nose
+  - selenium
+  - coverage
+  become: yes
+
+- name: install global npm dependencies
+  npm: name={{ item }} global=yes
+  with_items:
+  - bower
+  - grunt-cli
+  become: yes
+
+- name: init ros deps
+  shell: rosdep init
+  args:
+    creates: /etc/ros/rosdep/sources.list.d/20-default.list
+  become: yes
+
+- name: add rosdep names
+  copy: >
+    src=etc/ros/rosdep/sources.list.d/30-ros_webrtc.list
+    dest=/etc/ros/rosdep/sources.list.d/30-ros_webrtc.list
+    mode=0644
+  become: yes
+
+- name: add rosdep source
+  copy: >
+    src=etc/ros/rosdep/ros_webrtc.yaml
+    dest=/etc/ros/rosdep/ros_webrtc.yaml
+    mode=0644
+  become: yes
+
+- name: update ros deps
+  shell: rosdep update

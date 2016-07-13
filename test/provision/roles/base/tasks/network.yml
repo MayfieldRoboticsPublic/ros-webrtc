@@ -1,0 +1,17 @@
+---
+
+- name: copy resolvconf
+  copy:
+    src: etc/resolvconf/resolv.conf.d/base
+    dest: /etc/resolvconf/resolv.conf.d/base
+    owner: root
+    group: root
+    mode: 0644
+  tags: [dns]
+  register: resolvconf
+  become: yes
+
+- name: update resolvconf
+  command: /sbin/resolvconf -u
+  become: yes
+  when: resolvconf|changed

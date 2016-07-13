@@ -1,0 +1,247 @@
+#!/usr/bin/env python
+"""
+Example ROS node showing what a ROS WebRTC application might look like.
+"""
+import pprint
+import socket
+import uuid
+import weakref
+
+import roslaunch.scriptapi
+import rospy
+
+from ros_webrtc import application as app
+from ros_webrtc import signaling as sig
+import ros_webrtc.msg
+import ros_webrtc.srv
+import rosgraph
+
+
+class SignalHandler(sig.SignalHandler):
+
+    def __init__(self, app):
+        self.app = weakref.proxy(app)
+        super(SignalHandler, self).__init__()
+
+    def _pc_for(self, channel, session):
+        pc = self.app.pcs.get((session, channel))
+        if not pc:
+            raise sig.DropSignal('no pc')
+        return pc
+
+    # sig.SignalHandler
+
+    def on_connect(self, channel, session, payload):
+        pass
+
+    def on_disconnect(self, channel, session, payload):
+        pc = self._pc_for(channel, session)
+        pc.delete()
+
+    def on_call(self, channel, session, payload):
+        self.app.create_pc(session, channel,
+            sdp_constraints=ros_webrtc.msg.MediaConstraints(
+                mandatory=[],
+                optional=[],
+            ),
+            video_sources=['*'],
+            audio_sources=['*'],
+        )
+        self.app.sig_cli.send('pickup', channel, session)
+
+    def on_add_ice_candidate(self, channel, session, payload):
+        pc = self._pc_for(channel, session)
+        pc.add_ice_candidate(
+            sdp_mid=payload['sdpMid'],
+            sdp_mline_index=payload['sdpMLineIndex'],
+            candidate=payload['candidate'],
+        )
+
+    def on_set_session_description(self, channel, session, payload):
+        pc = self._pc_for(channel, session)
+        pc.set_remote_description(
+            type=payload['type'],
+            sdp=payload['sdp'],
+        )
+
+    def on_hangup(self, channel, session, payload):
+        pc = self._pc_for(channel, session)
+        pc.delete()
+
+
+class Application(app.Application):
+
+    def __init__(
+            self,
+            id_, signaling_url,
+            launch,
+            pc_timeout=None,
+            ros_webrtc_namespace=None,
+            rosbridge_timeout=5.0,
+            rosbridge_output='screen',
+            rosbridge_heartbeat=None):
+        super(Application, self).__init__(id_, ros_webrtc_namespace, pc_timeout)
+        self.launch = launch
+        self.rosbridge_timeout = rosbridge_timeout
+        self.rosbridge_output = rosbridge_output
+        self.rosbridge_heartbeat = rosbridge_heartbeat
+        self.sig_cli = sig.SignalClient(
+            signaling_url + '/' + self.id,
+            handler=SignalHandler(self)
+        )
+        self.sig_cli.connect()
+        self.svrs.extend([
+            rospy.Service(
+                rosgraph.names.ns_join(rospy.get_name(), name),
+                srv_cls,
+                handler
+            )
+            for name, srv_cls, handler in [
+                ('calls', ros_webrtc.srv.ExampleGetCalls, self.on_get_calls),
+                ('call', ros_webrtc.srv.ExampleCallPeer, self.on_call_peer),
+                ('hangup', ros_webrtc.srv.ExampleHangup, self.on_hangup),
+            ]
+        ])
+
+    def on_get_calls(self, req):
+        return ros_webrtc.srv.ExampleGetCallsResponse(
+            calls=[
+                ros_webrtc.msg.ExampleCall(id=pc.session_id, peer_id=pc.peer_id)
+                for pc in self.pcs.values()
+            ],
+        )
+
+    def on_call_peer(self, req):
+        pc = self.create_pc(
+            session_id=req.session_id or uuid.uuid4().hex,
+            peer_id=req.peer_id,
+            sdp_constraints=ros_webrtc.msg.MediaConstraints(
+                mandatory=[],
+                optional=[],
+            ),
+            video_sources=['*'],
+            audio_sources=['*'],
+        )
+        self.sig_cli.send('call', pc.peer_id, pc.session_id)
+        pc.create_data_channel(
+            label='rosbridge',
+            id=1,
+            reliable=False,
+            ordered=False,
+            protocol='application/vnd.rosbridge.v1+json; chunksize=512',
+        )
+        if not pc.rosbridge(
+                'rosbridge',
+                self.launch,
+                timeout=self.rosbridge_timeout,
+                output=self.rosbridge_output,
+                heartbeat=self.rosbridge_heartbeat):
+            pc.delete()
+            return
+        pc.create_offer()
+        call = ros_webrtc.msg.ExampleCall(id=pc.session_id, peer_id=pc.peer_id)
+        resp = ros_webrtc.srv.ExampleCallPeerResponse(call=call)
+        return resp
+
+    def on_hangup(self, req):
+        pc = self.pcs.get((req.id, req.peer_id))
+        if not pc:
+            rospy.logwarn('no call w/ id="%s", peer_id="%s"', req.id, req.peer_id)
+            return
+        pc.delete()
+        resp = ros_webrtc.srv.ExampleHangupResponse()
+        return resp
+
+    # Application
+
+    def shutdown(self):
+        self.sig_cli.close()
+        super(Application, self).shutdown()
+
+    def on_pc_delete(self, pc):
+        if self.sig_cli.connection:
+            self.sig_cli.send('hangup', pc.peer_id, pc.session_id)
+
+    def on_pc_data_channel(self, pc, msg):
+        if 'rosbridge' in msg.protocol:
+            if not pc.rosbridge(
+                    msg.label,
+                    self.launch,
+                    timeout=self.rosbridge_timeout,
+                    output=self.rosbridge_output,
+                    heartbeat=self.rosbridge_heartbeat):
+                return False
+        return True
+
+    def on_pc_ice_candidate(self, pc, msg):
+        self.sig_cli.send('add_ice_candidate', pc.peer_id, pc.session_id, {
+            'sdpMid': msg.sdp_mid,
+            'sdpMLineIndex': msg.sdp_mline_index,
+            'candidate': msg.candidate,
+        })
+
+    def on_pc_set_session_description(self, pc, msg):
+        self.sig_cli.send('set_session_description', pc.peer_id, pc.session_id, {
+            'type': msg.type,
+            'sdp': msg.sdp
+        })
+
+
+def load_config():
+    id_ = str(rospy.get_param('~id', uuid.uuid4().hex))
+    if id_ == 'hostname':
+        id_ = socket.gethostname()
+
+    signaling_url = rospy.get_param('~url', None)
+    if signaling_url is None:
+        signaling_host = rospy.get_param('~host', '127.0.0.1')
+        signaling_port = rospy.get_param('~port', 9000)
+        signaling_url = 'ws://{0}:{1}'.format(signaling_host, signaling_port)
+
+    return {
+        'id': id_,
+        'signaling_url': signaling_url,
+        'ros_webrtc_ns': rospy.get_param('~ros_webrtc_ns', None),
+        'peer_connection_timeout': rospy.get_param('~peer_connection_timeout', None),
+        'rosbridge_output': rospy.get_param('~rosbridge_output', 'screen'),
+        'rosbridge_timeout': float(rospy.get_param('~rosbridge_timeout', 5.0)),
+        'rosbridge_heartbeat': float(rospy.get_param('~rosbridge_heartbeat', 5.0)),
+    }
+
+
+def main():
+    a = None
+    l = None
+
+    def shutdown():
+        if a:
+            a.shutdown()
+        if l:
+            l.stop()
+
+    rospy.init_node('example')
+
+    c = load_config()
+    rospy.loginfo('config\n%s', pprint.pformat(c))
+
+    rospy.on_shutdown(shutdown)
+
+    roslaunch.pmon._init_signal_handlers()  # HACK: l.launch *not* called from main thread
+    l = roslaunch.scriptapi.ROSLaunch()
+    l.start()
+
+    a = Application(
+        c['id'],
+        signaling_url=c['signaling_url'],
+        launch=l,
+        pc_timeout=c['peer_connection_timeout'],
+        ros_webrtc_namespace=c['ros_webrtc_ns'],
+        rosbridge_output=c['rosbridge_output'],
+        rosbridge_timeout=c['rosbridge_timeout'],
+        rosbridge_heartbeat=c['rosbridge_heartbeat'],
+    )
+
+    rospy.spin()
+
+if __name__ == '__main__':
+    main()

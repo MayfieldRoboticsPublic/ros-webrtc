@@ -1,0 +1,13 @@
+---
+
+- include: network.yml
+  tags: [base, network]
+
+- include: swap.yml
+  tags: [base, swap]
+
+- include: deps.yml
+  tags: [base, deps]
+  
+- include: users.yml
+  tags: [base, users]

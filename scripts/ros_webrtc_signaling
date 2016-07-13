@@ -1,0 +1,226 @@
+#!/usr/bin/env python
+"""
+*Signaling* refers to the mechanism used to negotiate sessions in WebRTC. You
+can use anything you like to do that but its typically done via an internet
+facing WebSocket service.
+
+This ROS node is a *test*/*example* WebSocket signaling server.
+
+Note that you will need `ws4py`to use it, e.g.:
+
+.. code: bash
+
+    $ pip install ws4py
+
+"""
+import collections
+import json
+import functools
+import urlparse
+import wsgiref.simple_server
+import wsgiref.util
+
+import rospy
+
+from ws4py.server.wsgirefserver import WSGIServer, WebSocketWSGIRequestHandler
+from ws4py.server.wsgiutils import WebSocketWSGIApplication
+from ws4py.websocket import WebSocket
+
+
+class Rooms(dict):
+
+    def __init__(self):
+        self.channels = collections.defaultdict(list)
+
+    def join(self, room_id, peer):
+        if room_id not in self:
+            self[room_id] = Room(room_id, self.channels)
+        self[room_id].join(peer)
+        return self[room_id]
+
+    def send(self, channel, payload):
+        room_id = payload['session']
+        self[room_id].send(channel, payload)
+
+    def leave(self, room_id, peer):
+        self[room_id].leave(peer)
+        if self[room_id].empty:
+            del self[room_id]
+
+    def leave_all(self, peer):
+        for room in self.values():
+            if peer in room:
+                room.leave(peer)
+                if room.empty:
+                    self.pop(room.id)
+
+
+class Room(set):
+
+    def __init__(self, id_, channels):
+        self.id = id_
+        self.channels = channels
+
+    @property
+    def empty(self):
+        return len(self) == 0
+
+    def join(self, peer):
+        if peer in self:
+            return
+        self.add(peer)
+        self.send(None, {
+            'channel': peer.channel,
+            'type': 'connect',
+        })
+
+    def send(self, channel, payload):
+        payload['session'] = self.id
+        data = json.dumps(payload, indent=2)
+        if channel:
+            peers = [
+                peer for peer in self if peer.channel == channel
+            ] or self.channels[channel]
+            if not peers:
+                rospy.logwarn(
+                    'no peers w/ channel "%s", dropping\n%s',
+                    channel, data,
+                )
+                return 0
+        else:
+            peers = [
+                peer for peer in self if payload['channel'] != peer.channel
+            ]
+        count = 0
+        for peer in peers:
+            peer.send(data)
+            count += 1
+        return count
+
+    def leave(self, peer):
+        if peer not in self:
+            return
+        self.remove(peer)
+        self.send(None, {
+            'channel': peer.channel,
+            'type': 'disconnect',
+        })
+
+
+class Peer(WebSocket):
+
+    CHANNEL_ID_WSGI_HEADER = 'HTTP_X_CHANNEL'
+
+    def __init__(self, *args, **kwargs):
+        self.rooms = kwargs.pop('rooms')
+        super(Peer, self).__init__(*args, **kwargs)
+
+    @property
+    def channel(self):
+        return self.environ[self.CHANNEL_ID_WSGI_HEADER]
+
+    # WebSocket
+
+    def opened(self):
+        if self.channel:
+            self.rooms.channels[self.channel].append(self)
+            if len(self.rooms.channels[self.channel]) == 1:
+                rospy.loginfo('channel "%s" opened', self.channel)
+        return super(Peer, self).opened()
+
+    def received_message(self, message):
+        data = str(message)
+        try:
+            payload = json.loads(data)
+        except ValueError, ex:
+            rospy.logwarn('dropping malformed msg - %s', ex)
+            return
+        if 'channel' not in payload:
+            rospy.logwarn(
+                'dropping msg w/o "channel"\n%s', json.dumps(payload, indent=2)
+            )
+            return
+        if 'session' not in payload:
+            rospy.logwarn(
+                'dropping msg w/o "session"\n%s', json.dumps(payload, indent=2)
+            )
+            return
+        channel = payload['channel']
+        rospy.loginfo(
+            'channel "%s" -> "%s" -\n%s',
+            self.channel, channel, json.dumps(payload, indent=2),
+        )
+        room = self.rooms.join(payload['session'], self)
+        callback = payload.pop('callback', None)
+        if callback is not None:
+            payload['channel'] = callback
+        else:
+            payload['channel'] = self.channel
+        room.send(channel, payload)
+
+    def closed(self, code, reason=None):
+        if self.channel:
+            self.rooms.leave_all(self)
+            if self in self.rooms.channels[self.channel]:
+                self.rooms.channels[self.channel].remove(self)
+                if not self.rooms.channels[self.channel]:
+                    rospy.loginfo('channel "%s" closed', self.channel)
+        return super(Peer, self).closed(code, reason=reason)
+
+
+class PeerWSGIMiddleware(object):
+
+    def __init__(self, app, password=None):
+        self.app = app
+        self.password = password
+
+    def channel_id(self, environ):
+        uri = wsgiref.util.request_uri(environ)
+        url = urlparse.urlparse(uri)
+        parts = url.path.split('/')
+        if len(parts) != 2 or parts[0]:
+            return
+        return parts[1]
+
+    def auth(self, environ, start_response):
+        # TODO: basic auth
+        return True
+
+    def __call__(self, environ, start_response):
+        environ[Peer.CHANNEL_ID_WSGI_HEADER] = self.channel_id(environ)
+        if not self.auth(environ, start_response):
+            return
+        return self.app(environ, start_response)
+
+
+def main():
+    rospy.init_node('signaling', disable_signals=True)
+
+    rooms = Rooms()
+
+    server = wsgiref.simple_server.make_server(
+        host=rospy.get_param('~host', '127.0.0.1'),
+        port=rospy.get_param('~port', 9000),
+        server_class=WSGIServer,
+        handler_class=WebSocketWSGIRequestHandler,
+        app=PeerWSGIMiddleware(
+            WebSocketWSGIApplication(
+                handler_cls=functools.partial(
+                    Peer, heartbeat_freq=3.0, rooms=rooms,
+                )
+            ),
+            password=rospy.get_param('~password', None))
+    )
+    server.initialize_websockets_manager()
+
+    rospy.loginfo("serving %s:%d ...", *server.server_address)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        rospy.core.signal_shutdown('keyboard interrupt')
+    finally:
+        server.server_close()
+
+
+if __name__ == '__main__':
+    main()

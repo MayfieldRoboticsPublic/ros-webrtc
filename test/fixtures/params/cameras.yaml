@@ -1,0 +1,20 @@
+downward:
+  name: ros:///downward_looking_camera/image_raw
+  label: downward
+  publish: true
+  constraints:
+    optional:
+      maxWidth: "640"
+      minWidth: "640"
+      maxHeight: "480"
+      minHeight: "480"
+upward:
+  name: ros:///upward_looking_camera/image_raw
+  label: upward
+  publish: true
+  constraints:
+    optional:
+      maxWidth: "640"
+      minWidth: "640"
+      maxHeight: "480"
+      minHeight: "480"

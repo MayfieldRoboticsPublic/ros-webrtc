@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 import collections
+import contextlib
+import sys
+import time
 import unittest
 
 import rospy
@@ -15,63 +18,76 @@ NAME = 'host_test'
 
 
 class TestHost(unittest.TestCase):
-    
-    def _video_topic(self, host, label):
-        return '/{host}/local/video_{label}'.format(host=host, label=label)
-    
-    def _audio_topic(self, host, label):
-        return '/{host}/local/audio_{label}'.format(host=host, label=label)
-    
-    def _service(self, host, name):
-        return '/{host}/{name}'.format(host=host, name=name)
 
-    @unittest.skip("for now")
+    def _video_topic(self, label):
+        return 'local/{label}'.format(label=label)
+
+    def _audio_topic(self, label):
+        return 'local/{label}'.format(label=label)
+
+    def _service(self, name):
+        return '{0}'.format(name)
+
     def test_video(self):
-        
+
         def callback(image, topic):
             frames[topic] += 1
-            
+
         frames = collections.Counter();
-        
+
         topics = [
-            self._video_topic('host', 'downward'),
-            self._video_topic('host', 'upward'),
+            self._video_topic('downward'),
+            self._video_topic('upward'),
         ]
-        
+
         subscribers = [
             rospy.Subscriber(topic, sensor_msgs.msg.Image, callback, topic)
             for topic in topics
         ]
 
-        shutdown = rospy.Timer(
-            rospy.Duration(20.0),
-            lambda event: rospy.signal_shutdown('done'),
-            oneshot=True
-        )
-        
-        rospy.spin()
+        min_frames, expires_at = 3, time.time() + 60
+
+        while (not rospy.core.is_shutdown() and
+               not all(min_frames <= frames[topic] for topic in topics) and
+               time.time() < expires_at):
+            rospy.sleep(2.0)
 
         for topic in topics:
-            self.assertTrue(10 <= frames[topic] <= 100)
-    
+            self.assertGreaterEqual(frames[topic], min_frames)
+
     def test_conf(self):
-        srv = rospy.ServiceProxy(self._service('host', 'get_host'), ros_webrtc.srv.GetHost)
+        srv = rospy.ServiceProxy(self._service('get_host'), ros_webrtc.srv.GetHost)
+        srv.wait_for_service(5.0)
         resp = srv()
         self.assertEqual(len(resp.sdp_constraints.optional), 1)
         self.assertTrue(resp.sdp_constraints.optional[0].key == 'DtlsSrtpKeyAgreement')
         self.assertTrue(resp.sdp_constraints.optional[0].value)
         self.assertEqual(len(resp.sdp_constraints.mandatory), 0)
-        self.assertEqual(len(resp.tracks), 3)
-        self.assertDictEqual(
-            collections.Counter(track.kind for track in resp.tracks), 
-            {'video': 2, 'audio': 1}
-        )
-        self.assertEqual(resp.sessions, []) 
+        self.assertEqual(len(resp.video_sources), 2)
+        self.assertEqual(len(resp.audio_sources), 1)
+        self.assertEqual(resp.peer_connections, [])
+
+
+@contextlib.contextmanager
+def coverage():
+    """
+    https://github.com/ros/ros_comm/issues/558
+    """
+    coverage_mode = '--cov' in sys.argv
+    if coverage_mode:
+        sys.argv.remove('--cov')
+        rostest._start_coverage(['ros_webrtc'])
+    try:
+        yield
+    finally:
+        if coverage_mode:
+            rostest._stop_coverage(['ros_webrtc'])
 
 
 def main():
     rospy.init_node(NAME)
-    rostest.rosrun(PKG, NAME, TestHost)
+    with coverage():
+        rostest.rosrun(PKG, NAME, TestHost)
 
 
 if __name__ == '__main__':
