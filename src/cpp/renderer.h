@@ -65,6 +65,8 @@ public:
 
     webrtc::VideoTrackInterface* video_track();
 
+    void Close();
+
 private:
 
     rtc::scoped_refptr<webrtc::VideoTrackInterface> _video_track;

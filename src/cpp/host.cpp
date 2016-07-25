@@ -496,13 +496,19 @@ bool Host::_is_media_open() const {
 }
 
 void Host::_close_media() {
-    _video_capture_modules->remove_all();
     _auto_close_media = false;
     _audio_src.interface = NULL;
     for (auto i = _video_srcs.begin(); i != _video_srcs.end(); i++) {
-        (*i).renderer = NULL;
+        if ((*i).renderer) {
+            (*i).renderer->Close();
+            (*i).renderer = NULL;
+        }
+        if ((*i).interface) {
+            (*i).interface->Stop();
+        }
         (*i).interface = NULL;
     }
+    _video_capture_modules->remove_all();
 }
 
 PeerConnectionPtr Host::_find_peer_connection(const PeerConnectionKey& key) {

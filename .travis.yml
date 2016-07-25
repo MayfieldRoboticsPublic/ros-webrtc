@@ -25,6 +25,7 @@ before_install:
 install:
 # setup env for ansible travis.yml
 - export TRAVIS_CI_PATH=$(pwd)
+- export ROS_STATE_PATH=~/.ros
 - mkdir ../ros-webrtc-ws
 - export TRAVIS_WS_PATH=$(readlink -f $(pwd)/../ros-webrtc-ws)
 
@@ -37,6 +38,17 @@ install:
 script:
 - cd $TRAVIS_WS_PATH
 - source devel/setup.bash
-- echo $PYTHONPATH
 - catkin_make run_tests
 - catkin_test_results
+
+# py coverage
+- coverage combine $ROS_STATE_PATH/.coverage.*
+- coverage report -m
+
+# cpp coverage
+- lcov --path . --directory . --capture --no-external --output-file lcov.info
+- lcov --remove lcov.info 'test/*' 'devel/*' --output-file lcov.info
+- lcov --list lcov.info
+
+#after_success:
+#- bash <(curl -s https://codecov.io/bash) $TRAVIS_WS_PATH/.coverage $TRAVIS_WS_PATH/lcov.info

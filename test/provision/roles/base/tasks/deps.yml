@@ -1,6 +1,11 @@
 ---
 
-- name: install tools
+- name: update apt cache
+  apt: update_cache=yes cache_valid_time=3600
+  become: yes
+  tags: [tools]
+
+- name: install tools via apt
   apt: name={{ item }} state=present
   with_items:
   - vim
@@ -14,6 +19,7 @@
   - pkg-config
   - iftop
   - python2.7-dev
+  - lcov
   tags: [tools]
   become: yes
 
