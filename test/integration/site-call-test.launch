@@ -23,7 +23,7 @@
         </node>
         
         <!-- test -->
-        <test test-name="site_test" pkg="ros_webrtc" type="site_test.py" time-limit="600.0" args="call">
+        <test test-name="site_test" pkg="ros_webrtc" type="site_test.py" time-limit="600.0" args="call --cov">
             <param name="dist" value="$(find ros_webrtc)/test/fixtures/site/dist" type="str" />
             <param name="headless" value="1" type="bool" />
         </test>

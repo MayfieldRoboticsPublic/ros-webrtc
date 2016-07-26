@@ -51,7 +51,7 @@ or use [vagrant](https://www.vagrantup.com/):
 ~/tmp/ros-webrtc-ws$ catkin_make run_tests
 ```
 
-and if you want coverage:
+and if you want compiled code coverage:
 
 ```bash
 ~/tmp/ros-webrtc-ws$ catkin_make -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=ON
@@ -62,10 +62,10 @@ then use e.g. [lcov](http://ltp.sourceforge.net/coverage/lcov.php) to view the
 results:
 
 ```
-~/tmp/ros-webrtc-ws$ lcov --path . --directory . --capture --output-file coverage.info
-~/tmp/ros-webrtc-ws$ lcov --remove coverage.info 'devel/*' 'test/*' '/usr/*' '/opt/*' --output-file coverage.info
+~/tmp/ros-webrtc-ws$ lcov --path . --directory . --capture --no-external --output-file coverage.info
+~/tmp/ros-webrtc-ws$ lcov --remove coverage.info 'devel/*' 'test/*' --output-file coverage.info
 ~/tmp/ros-webrtc-ws$ lcov --list coverage.info
-``` 
+```
 
 ## demo
 
