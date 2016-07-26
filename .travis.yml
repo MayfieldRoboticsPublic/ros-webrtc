@@ -50,5 +50,5 @@ script:
 - lcov --remove lcov.info 'test/*' 'devel/*' --output-file lcov.info
 - lcov --list lcov.info
 
-#after_success:
-#- bash <(curl -s https://codecov.io/bash) $TRAVIS_WS_PATH/.coverage $TRAVIS_WS_PATH/lcov.info
+after_success:
+- bash <(curl -s https://codecov.io/bash) $TRAVIS_WS_PATH/.coverage $TRAVIS_WS_PATH/lcov.info
