@@ -1,4 +1,5 @@
-# ros-webrtc [![Build Status](https://travis-ci.org/mayfieldrobotics/ros-webrtc.svg?branch=develop)](https://travis-ci.org/mayfieldrobotics/ros-webrtc)
+# ros-webrtc [![Build Status](https://travis-ci.org/mayfieldrobotics/ros-webrtc.svg?branch=develop)](https://travis-ci.org/mayfieldrobotics/ros-webrtc) [![codecov](https://codecov.io/gh/mayfieldrobotics/ros-webrtc/branch/develop/graph/badge.svg)](https://codecov.io/gh/mayfieldrobotics/ros-webrtc)
+
 
 Exposes [Google's implementation](https://code.google.com/p/libjingle/) of
 [WebRTC](http://www.webrtc.org/) to ROS. It consists of 2 ROS nodes:
