@@ -36,6 +36,7 @@ install:
 - ansible-playbook -i "localhost," -c local travis.yml || true
 
 script:
+# tests
 - cd $TRAVIS_WS_PATH
 - source devel/setup.bash
 - catkin_make run_tests
@@ -44,11 +45,19 @@ script:
 # py coverage
 - coverage combine $ROS_STATE_PATH/.coverage.*
 - coverage report -m
+- coverage xml
+- cp coverage.xml $TRAVIS_CI_PATH/
 
 # cpp coverage
 - lcov --path . --directory . --capture --no-external --output-file lcov.info
 - lcov --remove lcov.info 'test/*' 'devel/*' --output-file lcov.info
 - lcov --list lcov.info
+- rm lcov.info
+- find . -type f -name "*.gcda" -exec gcov -pb {} +
+- find . -name "*.gcov" -a -not -name "*#src#ros_webrtc#src#cpp#*" -exec rm {} +
+- find . -name "*.gcov" -exec sed -i "s|$TRAVIS_WS_PATH/src/ros_webrtc|$TRAVIS_CI_PATH|g" {} +
+- cp *.gcov $TRAVIS_CI_PATH/
 
 after_success:
-- bash <(curl -s https://codecov.io/bash) -f $TRAVIS_WS_PATH/.coverage -f $TRAVIS_WS_PATH/lcov.info
+- cd $TRAVIS_CI_PATH
+- bash <(curl -s https://codecov.io/bash) -X gcov -X coveragepy
