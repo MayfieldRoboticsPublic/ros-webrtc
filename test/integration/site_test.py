@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import contextlib
 import logging
 import os
 import socket
@@ -21,6 +20,8 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from xvfbwrapper import Xvfb
+
+from ros_coverage import ros_coverage
 
 
 PKG = 'ros_webrtc'
@@ -436,22 +437,6 @@ class TestSiteCall(TestSite):
         self.page.wait_until(lambda _: self.page.is_connected_to_signaling)
 
 
-@contextlib.contextmanager
-def coverage():
-    """
-    https://github.com/ros/ros_comm/issues/558
-    """
-    coverage_mode = '--cov' in sys.argv
-    if coverage_mode:
-        sys.argv.remove('--cov')
-        rostest._start_coverage(['ros_webrtc'])
-    try:
-        yield
-    finally:
-        if coverage_mode:
-            rostest._stop_coverage(['ros_webrtc'])
-
-
 def main():
     rospy.init_node(NAME)
 
@@ -465,7 +450,7 @@ def main():
         else:
             raise ValueError('Invalid test "{0}".'.format(sys.argv[1]))
 
-    with coverage():
+    with ros_coverage():
         rostest.rosrun(PKG, NAME, test_cls)
 
 

@@ -61,12 +61,19 @@ VideoRenderer::VideoRenderer(
 }
 
 VideoRenderer::~VideoRenderer() {
-    ROS_INFO_STREAM("unregistering video renderer for '" << _rpub.getTopic() << "'");
-    _video_track->RemoveSink(this);
+    Close();
 }
 
 webrtc::VideoTrackInterface* VideoRenderer::video_track() {
     return _video_track.get();
+}
+
+void VideoRenderer::Close() {
+    ROS_INFO_STREAM("unregistering video renderer for '" << _rpub.getTopic() << "'");
+    if (_video_track) {
+        _video_track->RemoveSink(this);
+        _video_track = NULL;
+    }
 }
 
 void VideoRenderer::OnFrame(const cricket::VideoFrame& frame) {

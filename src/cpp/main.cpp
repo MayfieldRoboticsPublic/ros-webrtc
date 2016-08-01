@@ -13,8 +13,11 @@ struct Flush {
     Flush(Host& host) : host(host) {}
 
     void operator()(const ros::TimerEvent& event) {
-        ROS_INFO("flushing");
-        host.flush();
+        if (!ros::isShuttingDown()) {
+            ROS_INFO("flushing");
+            host.flush();
+            ROS_INFO("flushed");
+        }
     }
 
     Host &host;

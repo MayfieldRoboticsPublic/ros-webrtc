@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 import collections
-import contextlib
-import sys
 import time
 import unittest
 
@@ -11,6 +9,8 @@ import rostest
 import sensor_msgs.msg
 
 import ros_webrtc.srv
+
+from ros_coverage import ros_coverage
 
 
 PKG = 'ros_webrtc'
@@ -68,25 +68,9 @@ class TestHost(unittest.TestCase):
         self.assertEqual(resp.peer_connections, [])
 
 
-@contextlib.contextmanager
-def coverage():
-    """
-    https://github.com/ros/ros_comm/issues/558
-    """
-    coverage_mode = '--cov' in sys.argv
-    if coverage_mode:
-        sys.argv.remove('--cov')
-        rostest._start_coverage(['ros_webrtc'])
-    try:
-        yield
-    finally:
-        if coverage_mode:
-            rostest._stop_coverage(['ros_webrtc'])
-
-
 def main():
     rospy.init_node(NAME)
-    with coverage():
+    with ros_coverage():
         rostest.rosrun(PKG, NAME, TestHost)
 
 

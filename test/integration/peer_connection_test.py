@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 import binascii
 import collections
-import contextlib
 import os
 import random
 import time
-import sys
 import unittest
 import uuid
 import weakref
@@ -19,6 +17,8 @@ import ros_webrtc.application as app
 import ros_webrtc.msg
 import ros_webrtc.signaling as sig
 import ros_webrtc.srv
+
+from ros_coverage import ros_coverage
 
 
 PKG = 'ros_webrtc'
@@ -525,25 +525,9 @@ class TestPeerConnection(unittest.TestCase):
             ))
 
 
-@contextlib.contextmanager
-def coverage():
-    """
-    https://github.com/ros/ros_comm/issues/558
-    """
-    coverage_mode = '--cov' in sys.argv
-    if coverage_mode:
-        sys.argv.remove('--cov')
-        rostest._start_coverage(['ros_webrtc'])
-    try:
-        yield
-    finally:
-        if coverage_mode:
-            rostest._stop_coverage(['ros_webrtc'])
-
-
 def main():
     rospy.init_node(NAME)
-    with coverage():
+    with ros_coverage():
         rostest.rosrun(PKG, NAME, TestPeerConnection)
 
 

@@ -200,21 +200,21 @@ ROSVideoCaptureModule::CaptureThread::~CaptureThread() {
 void ROSVideoCaptureModule::CaptureThread::Run() {
     ros::CallbackQueue::CallOneResult result = ros::CallbackQueue::TryAgain;
 
-    while(true) {
+    while(!fStop_) {
         {
             // lock
             webrtc::CriticalSectionScoped cs(_parent._capture_cs);
-            if (!_parent._capturing)
+            if (fStop_)
                 break;
 
             // poll
             do {
                 // NOTE: handler is ROSVideoCaptureModule::_image_callback
                 result = _parent._image_q.callOne();
-            } while (result == ros::CallbackQueue::TryAgain);
+            } while (result == ros::CallbackQueue::TryAgain && !fStop_);
         }
 
-        if (result == ros::CallbackQueue::Called) {
+        if (!fStop_ && result == ros::CallbackQueue::Called) {
             if (!ProcessMessages(0)) {
                 break;
             }
