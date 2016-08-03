@@ -679,8 +679,13 @@ bool Host::Service::get_peer_connection(ros::ServiceEvent<ros_webrtc::GetPeerCon
     const auto &req = event.getRequest();
     PeerConnectionKey key = {req.session_id, req.peer_id};
     PeerConnectionPtr pc = _instance._find_peer_connection(key);
-    if (pc == NULL)
+    if (pc == NULL) {
+        ROS_INFO_STREAM(
+            "pc (" << key.session_id << "', '" << key.peer_id << "') " <<
+            "not found"
+        );
         return false;
+    }
     auto &resp = event.getResponse();
     resp.peer_connection = *pc;
     return true;
@@ -690,11 +695,21 @@ bool Host::Service::send_data(ros::ServiceEvent<ros_webrtc::SendData::Request, r
     const auto& req = event.getRequest();
     PeerConnectionKey key = {req.session_id, req.peer_id};
     PeerConnectionPtr pc = _instance._find_peer_connection(key);
-    if (pc == NULL)
+    if (pc == NULL) {
+        ROS_INFO_STREAM(
+            "pc (" << key.session_id << "', '" << key.peer_id << "') " <<
+            "not found"
+        );
         return false;
+    }
     DataChannelPtr dc = pc->data_channel(req.data.label);
-    if (dc == NULL)
+    if (dc == NULL) {
+        ROS_INFO_STREAM(
+            "pc (" << key.session_id << "', '" << key.peer_id << "') " <<
+            "has no data channel w/ label " << req.data.label
+        );
         return false;
+    }
     dc->send(req.data);
     return true;
 }
@@ -703,8 +718,13 @@ bool Host::Service::set_remote_description(ros::ServiceEvent<ros_webrtc::SetRemo
     const auto& req = event.getRequest();
     PeerConnectionKey key = {req.session_id, req.peer_id};
     PeerConnectionPtr pc = _instance._find_peer_connection(key);
-    if (pc == NULL)
+    if (pc == NULL) {
+        ROS_INFO_STREAM(
+            "pc (" << key.session_id << "', '" << key.peer_id << "') " <<
+            "not found"
+        );
         return false;
+    }
     webrtc::SdpParseError err;
     auto desc = webrtc::CreateSessionDescription(
         req.session_description.type,

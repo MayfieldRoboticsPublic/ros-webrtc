@@ -180,6 +180,10 @@ class Application(object):
         rospy.loginfo('created pc %s', pc)
         return pc
 
+    def get_pc(self, session_id, peer_id):
+        key = (session_id, peer_id)
+        return self.pcs.get(key)
+
     def delete_pc(self, session_id, peer_id):
         key = (session_id, peer_id)
         pc = self.pcs.pop(key, None)
