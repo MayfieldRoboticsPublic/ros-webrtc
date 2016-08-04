@@ -25,11 +25,17 @@ Config Config::get(ros::NodeHandle& nh) {
     // microphone
     _get(nh, "microphone", instance.microphone);
 
-    // peer connection bond timeout
-    instance.pc_bond_timeout = 10.0;  // 10 seconds
-    if (nh.hasParam("peer_connection/timeout")) {
-        if (!nh.getParam("peer_connection/timeout", instance.pc_bond_timeout)) {
-            ROS_WARN("'peer_connection/timeout' param type not double");
+    // peer bond timeouts
+    instance.pc_bond_connect_timeout = 10.0;  // seconds
+    if (nh.hasParam("peer_connection/connect_timeout")) {
+        if (!nh.getParam("peer_connection/connect_timeout", instance.pc_bond_connect_timeout)) {
+            ROS_WARN("'peer_connection/connect_timeout' param type not double");
+        }
+    }
+    instance.pc_bond_heartbeat_timeout = 4.0;  // seconds
+    if (nh.hasParam("peer_connection/heartbeat_timeout")) {
+        if (!nh.getParam("peer_connection/heartbeat_timeout", instance.pc_bond_heartbeat_timeout)) {
+            ROS_WARN("'peer_connection/heartbeat_timeout' param type not double");
         }
     }
 

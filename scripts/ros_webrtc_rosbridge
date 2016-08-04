@@ -132,19 +132,25 @@ class DataChannelBridge(object):
         return True
 
     def teardown(self):
+        rospy.loginfo('%s teardown begin ...', self)
         if self.bond:
+            rospy.loginfo('shutting down bind')
             if getattr(self.bond, 'sub', None):
                 self.bond.shutdown()
             self.bond = None
         if self.protocol is not None:
+            rospy.loginfo('finishing protocol')
             self.protocol.finish()
             self.protocol = None
         if self.subscriber is not None:
+            rospy.loginfo('unregistering subscriber')
             self.subscriber.unregister()
             self.subscriber = None
         if self.send is not None:
+            rospy.loginfo('closing send')
             self.send.close()
             self.send = None
+        rospy.loginfo('%s teardown done', self)
 
     def _send(self, msg):
         rospy.logdebug('%s sending - size=%s', self, len(msg))
@@ -153,12 +159,16 @@ class DataChannelBridge(object):
             encoding='utf-8',
             buffer=array.array('B', msg).tolist() or []
         )
-        with self.send_lock:
-            self.send(
-                session_id=self.session_id,
-                peer_id=self.peer_id,
-                data=data
-            )
+        try:
+            with self.send_lock:
+                self.send(
+                    session_id=self.session_id,
+                    peer_id=self.peer_id,
+                    data=data
+                )
+        except rospy.ServiceException as ex:
+            rospy.signal_shutdown(str(ex))
+            raise
 
     def _recv(self, msg):
         rospy.logdebug(
@@ -182,7 +192,13 @@ def main():
     def shutdown():
         if dcb:
             dcb.teardown()
-        rospy.delete_param(rospy.get_name())
+        rospy.loginfo('deleting %s params', rospy.get_name())
+        try:
+            rospy.delete_param(rospy.get_name())
+        except KeyError:
+            rospy.logwarn('no params for %s', rospy.get_name())
+        else:
+            rospy.loginfo('deleted %s params', rospy.get_name())
 
     rospy.init_node('rosbridge')
 

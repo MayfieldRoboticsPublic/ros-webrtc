@@ -58,23 +58,26 @@ class ApplicationRTCPeerConnection(RTCPeerConnection):
             app,
             session_id,
             peer_id,
-            bond_timeout=None,
+            bond_connect_timeout=None,
+            bond_heartbeat_timeout=None,
             **kwargs):
         super(ApplicationRTCPeerConnection, self).__init__(
             session_id, peer_id, **kwargs
         )
         self.app = weakref.proxy(app)
-        if bond_timeout != 0:
+        if bond_connect_timeout != 0 and bond_heartbeat_timeout != 0:
             self.pc_bond = self.bond(
                 on_broken=self.on_pc_bond_broken,
                 on_formed=self.on_pc_bond_formed,
             )
+            if bond_connect_timeout is not None:
+                self.pc_bond.connect_timeout = bond_connect_timeout
+            if bond_heartbeat_timeout is not None:
+                self.pc_bond.heartbeat_timeout = bond_heartbeat_timeout
         else:
             rospy.loginfo('%s bonding disabled', self)
             self.pc_bond = None
-        if self.pc_bond and bond_timeout is not None:
-            self.pc_bond.heartbeat_timeout = bond_timeout
-        self.rosbridge_bonds = []
+        self.rosbridges = []
         self.deleting = False
         self.callbacks = ApplicationRTCPeerConnectionCallbacks(app, self)
         self.app.pcs[(self.session_id, self.peer_id)] = self
@@ -82,6 +85,7 @@ class ApplicationRTCPeerConnection(RTCPeerConnection):
             self.pc_bond.start()
 
     def delete(self):
+        rospy.loginfo('%s deleting', self)
         if self.app is None:
             return
         self.app, app = None, self.app
@@ -92,9 +96,9 @@ class ApplicationRTCPeerConnection(RTCPeerConnection):
                 if self.pc_bond:
                     self.pc_bond.shutdown()
                     self.pc_bond = None
-                for bond in self.rosbridge_bonds:
-                    bond.shutdown()
-                del self.rosbridge_bonds[:]
+                while self.rosbridges:
+                    rosbridge = self.rosbridges.pop()
+                    rosbridge.stop()
                 if self.callbacks:
                     self.callbacks.shutdown()
                 try:
@@ -121,40 +125,36 @@ class ApplicationRTCPeerConnection(RTCPeerConnection):
 
     # RTCPeerConnection
 
-    def rosbridge(
-            self,
+    def rosbridge(self, data_channel_label, launch, timeout=5.0, **kwargs):
+        rosbridge = super(ApplicationRTCPeerConnection, self).rosbridge(
             data_channel_label,
             launch,
-            timeout=5.0,
-            heartbeat=None,
-            **kwargs):
-        rosbridge_bond = super(ApplicationRTCPeerConnection, self).rosbridge(
-            data_channel_label,
-            launch,
-            timeout=timeout,
-            heartbeat=heartbeat,
             on_broken=functools.partial(
                 self.on_rosbridge_bond_broken, data_channel_label
             ),
             on_formed=functools.partial(
                 self.on_rosbridge_bond_formed, data_channel_label
             ),
+            timeout=timeout,
             **kwargs
         )
-        if not rosbridge_bond:
-            return
-        self.rosbridge_bonds.append(rosbridge_bond)
-        return rosbridge_bond
+        self.rosbridges.append(rosbridge)
+        return rosbridge
 
 
 class Application(object):
 
-    def __init__(self, id_, ros_webrtc_namespace=None, pc_timeout=None):
+    def __init__(self,
+            id_,
+            ros_webrtc_namespace=None,
+            pc_connect_timeout=None,
+            pc_heartbeat_timeout=None):
         self.id = id_
         self.pcs = {}
         self.svrs = []
         self.ros_webrtc_namespace = ros_webrtc_namespace
-        self.pc_timeout = pc_timeout
+        self.pc_connect_timeout = pc_connect_timeout
+        self.pc_heartbeat_timeout = pc_heartbeat_timeout
 
     def shutdown(self):
         for pc in self.pcs.values():
@@ -174,11 +174,16 @@ class Application(object):
             self,
             session_id,
             peer_id,
-            bond_timeout=self.pc_timeout,
+            bond_connect_timeout=self.pc_connect_timeout,
+            bond_heartbeat_timeout=self.pc_heartbeat_timeout,
             **kwargs
         )
         rospy.loginfo('created pc %s', pc)
         return pc
+
+    def get_pc(self, session_id, peer_id):
+        key = (session_id, peer_id)
+        return self.pcs.get(key)
 
     def delete_pc(self, session_id, peer_id):
         key = (session_id, peer_id)

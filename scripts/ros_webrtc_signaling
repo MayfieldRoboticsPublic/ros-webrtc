@@ -82,7 +82,7 @@ class Room(set):
                 peer for peer in self if peer.channel == channel
             ] or self.channels[channel]
             if not peers:
-                rospy.logwarn(
+                rospy.loginfo(
                     'no peers w/ channel "%s", dropping\n%s',
                     channel, data,
                 )
