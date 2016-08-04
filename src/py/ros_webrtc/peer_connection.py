@@ -55,7 +55,8 @@ class ROSBridge(object):
     def __init__(self,
             pc,
             data_channel_label,
-            heartbeat=None,
+            connect_timeout=None,
+            heartbeat_timeout=None,
             on_broken=None,
             on_formed=None,
             **kwargs):
@@ -71,8 +72,10 @@ class ROSBridge(object):
             on_broken=on_broken,
             on_formed=on_formed,
         )
-        if heartbeat is not None:
-            self.bond.heartbeat_timeout = heartbeat
+        if connect_timeout is not None:
+            self.bond.connect_timeout = connect_timeout
+        if heartbeat_timeout is not None:
+            self.bond.heartbeat_timeout = heartbeat_timeout
 
     def __del__(self):
         self.stop()
@@ -166,9 +169,6 @@ class RTCPeerConnection(object):
             data_channel_label,
             launch,
             timeout=None,
-            heartbeat=None,
-            on_broken=None,
-            on_formed=None,
             **kwargs):
         rospy.loginfo(
             'adapting %s datachannel "%s" to rosbridge',
@@ -177,9 +177,6 @@ class RTCPeerConnection(object):
         rosbridge = ROSBridge(
             pc=self,
             data_channel_label=data_channel_label,
-            heartbeat=heartbeat,
-            on_broken=on_broken,
-            on_formed=on_formed,
             **kwargs
         )
         rosbridge.start(launch, timeout=timeout)

@@ -59,7 +59,8 @@ int main(int argc, char **argv) {
         host_factory.ice_servers.push_back(config.ice_servers[i]);
     }
     host_factory.pc_constraints = config.pc_constraints;
-    host_factory.pc_bond_timeout = config.pc_bond_timeout;
+    host_factory.pc_bond_connect_timeout = config.pc_bond_connect_timeout;
+    host_factory.pc_bond_heartbeat_timeout = config.pc_bond_heartbeat_timeout;
     host_factory.queue_sizes = config.queue_sizes;
     Host host = host_factory(nh);
 

@@ -99,7 +99,8 @@ public:
         const std::vector<VideoSource>& video_srcs,
         const AudioSource& audio_src,
         const MediaConstraints& pc_constraints,
-        double pc_bond_timeout,
+        double pc_bond_connect_timeout,
+        double pc_bond_heartbeat_timeout,
         const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers,
         const QueueSizes& queue_sizes);
 
@@ -259,7 +260,9 @@ private:
 
     MediaConstraints _pc_constraints;
 
-    double _pc_bond_timeout;
+    double _pc_bond_connect_timeout;
+
+    double _pc_bond_heartbeat_timeout;
 
     std::vector<webrtc::PeerConnectionInterface::IceServer> _ice_servers;
 
@@ -294,7 +297,9 @@ struct HostFactory {
 
     AudioSource audio_src;
 
-    float pc_bond_timeout;
+    double pc_bond_connect_timeout;
+
+    double pc_bond_heartbeat_timeout;
 
     MediaConstraints pc_constraints;
 

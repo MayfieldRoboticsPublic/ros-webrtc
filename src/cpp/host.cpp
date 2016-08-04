@@ -69,7 +69,8 @@ Host::Host(
     const std::vector<VideoSource>& video_srcs,
     const AudioSource& audio_src,
     const MediaConstraints& pc_constraints,
-    double pc_bond_timeout,
+    double pc_bond_connect_timeout,
+    double pc_bond_heartbeat_timeout,
     const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers,
     const QueueSizes& queue_sizes) :
     _nh(nh),
@@ -77,7 +78,8 @@ Host::Host(
     _video_capture_modules(new VideoCaptureModuleRegistry()),
     _audio_src(audio_src),
     _pc_constraints(pc_constraints),
-    _pc_bond_timeout(pc_bond_timeout),
+    _pc_bond_connect_timeout(pc_bond_connect_timeout),
+    _pc_bond_heartbeat_timeout(pc_bond_heartbeat_timeout),
     _ice_servers(ice_servers),
     _queue_sizes(queue_sizes),
     _srv(*this),
@@ -89,7 +91,8 @@ Host::Host(const Host& other) :
     _video_srcs(other._video_srcs),
     _audio_src(other._audio_src),
     _pc_constraints(other._pc_constraints),
-    _pc_bond_timeout(other._pc_bond_timeout),
+    _pc_bond_connect_timeout(other._pc_bond_connect_timeout),
+    _pc_bond_heartbeat_timeout(other._pc_bond_heartbeat_timeout),
     _ice_servers(other._ice_servers),
     _queue_sizes(other._queue_sizes),
     _srv(*this),
@@ -190,7 +193,8 @@ PeerConnectionPtr Host::create_peer_connection(
         peer_id,
         sdp_constraints,
         _queue_sizes,
-        _pc_bond_timeout
+        _pc_bond_connect_timeout,
+        _pc_bond_heartbeat_timeout
     ));
 
     // and start it
@@ -843,7 +847,8 @@ Host HostFactory::operator()(ros::NodeHandle &nh) {
         video_srcs,
         audio_src,
         pc_constraints,
-        pc_bond_timeout,
+        pc_bond_connect_timeout,
+        pc_bond_heartbeat_timeout,
         ice_servers,
         queue_sizes
     );

@@ -35,7 +35,8 @@ PeerConnection::PeerConnection(
     const std::string& peer_id,
     const MediaConstraints& sdp_constraints,
     const QueueSizes& queue_sizes,
-    double bond_timeout) :
+    double connect_timeout,
+    double heartbeat_timeout) :
     _nn(node_name),
     _session_id(session_id),
     _peer_id(peer_id),
@@ -54,10 +55,12 @@ PeerConnection::PeerConnection(
         boost::function<void (void)>(boost::bind(&PeerConnection::_on_bond_broken, this)),
         boost::function<void (void)>(boost::bind(&PeerConnection::_on_bond_formed, this))
     ) {
-    _bond.setHeartbeatTimeout(bond_timeout);
+    _bond.setConnectTimeout(connect_timeout);
+    _bond.setHeartbeatTimeout(heartbeat_timeout);
     ROS_INFO_STREAM(
-        "pc ('" << _session_id << "', '"<< _peer_id << "') " <<
-        "bond heartbeat timeout = " << bond_timeout
+        "pc ('" << _session_id << "', '"<< _peer_id << "') bond - " <<
+        "connect_timeout=" << _bond.getConnectTimeout() << ", " <<
+        "heartbeat_timeout=" << _bond.getHeartbeatTimeout()
     );
 }
 

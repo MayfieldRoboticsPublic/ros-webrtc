@@ -52,6 +52,7 @@ public:
      * \param peer_id String identifying the remote peer.
      * \param sdp_constraints Media constraints to apply for this peer connection.
      * \param default_queue_size Default size of publisher and subscriber queues.
+     * \param connect_timeout Bond connect timeout in seconds or 0 for no bonding.
      * \param heartbeat_timeout Bond heartbeat timeout in seconds or 0 for no bonding.
      */
     PeerConnection(
@@ -60,7 +61,8 @@ public:
         const std::string& peer_id,
         const MediaConstraints& sdp_constraints,
         const QueueSizes& queue_sizes,
-        double bond_timeout);
+        double connect_timeout=10.0,
+        double heartbeat_timeout=4.0);
 
     /**
      * \brief String identifying the session.
