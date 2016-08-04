@@ -12,6 +12,95 @@ import ros_webrtc.msg
 import ros_webrtc.srv
 
 
+class ROSBridge(object):
+
+    @classmethod
+    def _node(cls,
+            pc,
+            data_channel_label,
+            wait_for_recv=None,
+            **kwargs):
+        args = [
+            '_session_id:={0}'.format(pc.session_id),
+            '_label:={0}'.format(data_channel_label),
+            '_peer_id:={0}'.format(pc.peer_id),
+        ]
+        if pc.namespace:
+            args.append('_ros_webrtc_ns:={0}'.format(pc.namespace))
+        if wait_for_recv is not None:
+            args.append('_wait_for_recv:={0}'.format(wait_for_recv))
+        node = roslaunch.core.Node(
+            'ros_webrtc',
+            'ros_webrtc_rosbridge',
+            namespace=rospy.get_namespace(),
+            name='rosbridge_{0}_{1}_{2}'.format(*map(normalize_ros_name, [
+                pc.session_id, data_channel_label, pc.peer_id
+            ])),
+            args=' '.join(args),
+            **kwargs
+        )
+        return node
+
+    @classmethod
+    def _bond(cls,
+            pc,
+            data_channel_label,
+            **kwargs):
+        return bondpy.bondpy.Bond(
+            topic='rosbridge_bond',
+            id='_'.join([pc.session_id, data_channel_label, pc.peer_id]),
+            **kwargs
+        )
+
+    def __init__(self,
+            pc,
+            data_channel_label,
+            heartbeat=None,
+            on_broken=None,
+            on_formed=None,
+            **kwargs):
+        self.node = self._node(
+            pc=pc,
+            data_channel_label=data_channel_label,
+            **kwargs
+        )
+        self.process = None
+        self.bond = self._bond(
+            pc=pc,
+            data_channel_label=data_channel_label,
+            on_broken=on_broken,
+            on_formed=on_formed,
+        )
+        if heartbeat is not None:
+            self.bond.heartbeat_timeout = heartbeat
+
+    def __del__(self):
+        self.stop()
+
+    def start(self, launch, timeout=None):
+        try:
+            self.process = launch.launch(self.node)
+            self.bond.start()
+            if timeout:
+                if not self.bond.wait_until_formed(rospy.Duration.from_sec(timeout)):
+                    raise RuntimeError(
+                        'Bond "{0}" timed out after {1} sec(s).'
+                        .format(self.bond.topic, timeout)
+                    )
+        except Exception:
+            self.stop()
+            raise
+
+    def stop(self):
+        if self.process:
+            if self.process.is_alive():
+                self.process.stop()
+            self.process = None
+        if self.bond:
+            self.bond.shutdown()
+            self.bond = None
+
+
 class RTCPeerConnection(object):
 
     def __init__(
@@ -72,18 +161,6 @@ class RTCPeerConnection(object):
             **kwargs
         )
 
-    def rosbridge_node(self, *args, **kwargs):
-        return rosbridge_node(
-            self.session_id,
-            self.peer_id,
-            *args,
-            ros_webrtc_namespace=self.namespace,
-            **kwargs
-        )
-
-    def rosbridge_bond(self, *args, **kwargs):
-        return rosbridge_bond(self.session_id, self.peer_id, *args, **kwargs)
-
     def rosbridge(
             self,
             data_channel_label,
@@ -93,22 +170,20 @@ class RTCPeerConnection(object):
             on_broken=None,
             on_formed=None,
             **kwargs):
-        rospy.loginfo('adapting %s datachannel "%s" to rosbridge', self, data_channel_label)
-        node = self.rosbridge_node(data_channel_label, **kwargs)
-        launch.launch(node)
-        bond = self.rosbridge_bond(
-            data_channel_label,
+        rospy.loginfo(
+            'adapting %s datachannel "%s" to rosbridge',
+            self, data_channel_label
+        )
+        rosbridge = ROSBridge(
+            pc=self,
+            data_channel_label=data_channel_label,
+            heartbeat=heartbeat,
             on_broken=on_broken,
             on_formed=on_formed,
+            **kwargs
         )
-        if heartbeat is not None:
-            bond.heartbeat_timeout = heartbeat
-        bond.start()
-        if timeout:
-            if not bond.wait_until_formed(rospy.Duration.from_sec(timeout)):
-                bond.shutdown()
-                return
-        return bond
+        rosbridge.start(launch, timeout=timeout)
+        return rosbridge
 
     def _cmd(self, type_, wait_for_service=None, **kwargs):
         kwargs.update({
@@ -273,46 +348,5 @@ def bond(session_id, peer_id, namespace=None, **kwargs):
     return bondpy.bondpy.Bond(
         topic=join_ros_names(namespace, 'peer_connection_bond'),
         id='_'.join([session_id, peer_id]),
-        **kwargs
-    )
-
-
-def rosbridge_node(
-        session_id,
-        peer_id,
-        data_channel_label,
-        ros_webrtc_namespace=None,
-        wait_for_recv=None,
-        **kwargs):
-    args = [
-        '_session_id:={0}'.format(session_id),
-        '_label:={0}'.format(data_channel_label),
-        '_peer_id:={0}'.format(peer_id),
-    ]
-    if ros_webrtc_namespace:
-        args.append('_ros_webrtc_ns:={0}'.format(ros_webrtc_namespace))
-    if wait_for_recv is not None:
-        args.append('_wait_for_recv:={0}'.format(wait_for_recv))
-    node = roslaunch.core.Node(
-        'ros_webrtc',
-        'ros_webrtc_rosbridge',
-        namespace=rospy.get_namespace(),
-        name='rosbridge_{0}_{1}_{2}'.format(*map(normalize_ros_name, [
-            session_id, data_channel_label, peer_id
-        ])),
-        args=' '.join(args),
-        **kwargs
-    )
-    return node
-
-
-def rosbridge_bond(
-        session_id,
-        peer_id,
-        data_channel_label,
-        **kwargs):
-    return bondpy.bondpy.Bond(
-        topic='rosbridge_bond',
-        id='_'.join([session_id, data_channel_label, peer_id]),
         **kwargs
     )

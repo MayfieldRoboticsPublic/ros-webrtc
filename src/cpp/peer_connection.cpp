@@ -55,6 +55,10 @@ PeerConnection::PeerConnection(
         boost::function<void (void)>(boost::bind(&PeerConnection::_on_bond_formed, this))
     ) {
     _bond.setHeartbeatTimeout(bond_timeout);
+    ROS_INFO_STREAM(
+        "pc ('" << _session_id << "', '"<< _peer_id << "') " <<
+        "bond heartbeat timeout = " << bond_timeout
+    );
 }
 
 const std::string& PeerConnection::session_id() const {

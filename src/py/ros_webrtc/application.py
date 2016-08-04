@@ -74,7 +74,7 @@ class ApplicationRTCPeerConnection(RTCPeerConnection):
             self.pc_bond = None
         if self.pc_bond and bond_timeout is not None:
             self.pc_bond.heartbeat_timeout = bond_timeout
-        self.rosbridge_bonds = []
+        self.rosbridges = []
         self.deleting = False
         self.callbacks = ApplicationRTCPeerConnectionCallbacks(app, self)
         self.app.pcs[(self.session_id, self.peer_id)] = self
@@ -92,9 +92,9 @@ class ApplicationRTCPeerConnection(RTCPeerConnection):
                 if self.pc_bond:
                     self.pc_bond.shutdown()
                     self.pc_bond = None
-                for bond in self.rosbridge_bonds:
-                    bond.shutdown()
-                del self.rosbridge_bonds[:]
+                while self.rosbridges:
+                    rosbridge = self.rosbridges.pop()
+		    rosbridge.stop()
                 if self.callbacks:
                     self.callbacks.shutdown()
                 try:
@@ -128,7 +128,7 @@ class ApplicationRTCPeerConnection(RTCPeerConnection):
             timeout=5.0,
             heartbeat=None,
             **kwargs):
-        rosbridge_bond = super(ApplicationRTCPeerConnection, self).rosbridge(
+        rosbridge = super(ApplicationRTCPeerConnection, self).rosbridge(
             data_channel_label,
             launch,
             timeout=timeout,
@@ -141,10 +141,8 @@ class ApplicationRTCPeerConnection(RTCPeerConnection):
             ),
             **kwargs
         )
-        if not rosbridge_bond:
-            return
-        self.rosbridge_bonds.append(rosbridge_bond)
-        return rosbridge_bond
+        self.rosbridges.append(rosbridge)
+        return rosbridge
 
 
 class Application(object):
