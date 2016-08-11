@@ -33,6 +33,7 @@ and setup a catkin workspace using [ansible](http://docs.ansible.com/):
 
 ```bash
 ~$ cd ~/code/ros-webrtc/test/provision
+~/code/ros-webrtc/test/provision$ ansible-galaxy install -r requirements.yml
 ~/code/ros-webrtc/test/provision$ ansible-playbook -i 'localhost,' -c local -K dev.yml
 ```
 
