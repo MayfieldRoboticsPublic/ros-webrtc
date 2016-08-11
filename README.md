@@ -32,14 +32,14 @@ generate a project if you want, e.g. for Eclipse CDT do:
 and setup a catkin workspace using [ansible](http://docs.ansible.com/):
 
 ```bash
-~$cd ~/code/ros-webrtc/test/provision
-~/code/ros-webrtc/test/provision$ ansible-playbook -i 'localhost,' -c local -U root -K dev.yml
+~$ cd ~/code/ros-webrtc/test/provision
+~/code/ros-webrtc/test/provision$ ansible-playbook -i 'localhost,' -c local -K dev.yml
 ```
 
 or use [vagrant](https://www.vagrantup.com/):
 
 ```bash
-~$cd ~/code/ros-webrtc
+~$ cd ~/code/ros-webrtc
 ~/code/ros-webrtc$ vagrant up
 ```
 
