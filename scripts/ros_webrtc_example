@@ -79,12 +79,12 @@ class Application(app.Application):
             ros_webrtc_namespace=None,
             rosbridge_timeout=5.0,
             rosbridge_output='screen',
-            rosbridge_heartbeat=None):
+            rosbridge_heartbeat_timeout=None):
         super(Application, self).__init__(id_, ros_webrtc_namespace, pc_timeout)
         self.launch = launch
         self.rosbridge_timeout = rosbridge_timeout
         self.rosbridge_output = rosbridge_output
-        self.rosbridge_heartbeat = rosbridge_heartbeat
+        self.rosbridge_heartbeat_timeout = rosbridge_heartbeat_timeout
         self.sig_cli = sig.SignalClient(
             signaling_url + '/' + self.id,
             handler=SignalHandler(self)
@@ -135,7 +135,7 @@ class Application(app.Application):
                 self.launch,
                 timeout=self.rosbridge_timeout,
                 output=self.rosbridge_output,
-                heartbeat=self.rosbridge_heartbeat):
+                heartbeat_timeout=self.rosbridge_heartbeat_timeout):
             pc.delete()
             return
         pc.create_offer()
@@ -169,7 +169,7 @@ class Application(app.Application):
                     self.launch,
                     timeout=self.rosbridge_timeout,
                     output=self.rosbridge_output,
-                    heartbeat=self.rosbridge_heartbeat):
+                    heartbeat_timeout=self.rosbridge_heartbeat_timeout):
                 return False
         return True
 
@@ -205,7 +205,7 @@ def load_config():
         'peer_connection_timeout': rospy.get_param('~peer_connection_timeout', None),
         'rosbridge_output': rospy.get_param('~rosbridge_output', 'screen'),
         'rosbridge_timeout': float(rospy.get_param('~rosbridge_timeout', 5.0)),
-        'rosbridge_heartbeat': float(rospy.get_param('~rosbridge_heartbeat', 5.0)),
+        'rosbridge_heartbeat_timeout': float(rospy.get_param('~rosbridge_heartbeat_timeout', 5.0)),
     }
 
 
@@ -238,7 +238,7 @@ def main():
         ros_webrtc_namespace=c['ros_webrtc_ns'],
         rosbridge_output=c['rosbridge_output'],
         rosbridge_timeout=c['rosbridge_timeout'],
-        rosbridge_heartbeat=c['rosbridge_heartbeat'],
+        rosbridge_heartbeat_timeout=c['rosbridge_heartbeat_timeout'],
     )
 
     rospy.spin()

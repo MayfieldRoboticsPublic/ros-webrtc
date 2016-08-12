@@ -43,7 +43,8 @@ public:
           name: HD Camera
           label: wayward
        peer_connection:
-        timeout: 10.0
+        connect_timeout: 10.0
+        heartbeat_timeout: 4.0
         constraints:
           optional:
           DtlsSrtpKeyAgreement: "true"
@@ -72,7 +73,9 @@ public:
 
     AudioSource microphone; /*! Single audio source. */
 
-    double pc_bond_timeout; /*! Peer connection bond heartbeat timeout, or 0 for no bonding. */
+    double pc_bond_connect_timeout; /*! Peer connection bond connect timeout, or 0 for no bonding. */
+
+    double pc_bond_heartbeat_timeout; /*! Peer connection bond heartbeat timeout, or 0 for no bonding. */
 
     MediaConstraints pc_constraints; /*! Peer connection media constraints. */
 
