@@ -128,6 +128,7 @@ ros_webrtc.Signaling = Backbone.Model.extend({
           add_ice_candidate: this._onAddIceCandidate,
           set_session_description: this._onSetSessionDescription,
           hangup: this._onHangup,
+          connect: function(){},
         }[msg.type];
     handler.call(this, msg);
   },
