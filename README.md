@@ -266,7 +266,7 @@ http://localhost:8080/#cd0bdd0b147c4ba4bea16ca3cb35c140/wait
 and call it from `ros_webrtc_example`:
 
 ```bash
-~/tmp/ros-webrtc-ws$ rosservice call /ros_webrtc/example/call cd0bdd0b147c4ba4bea16ca3cb35c140 ''
+~/tmp/ros-webrtc-ws$ rosservice call /ros_webrtc_example/example/call cd0bdd0b147c4ba4bea16ca3cb35c140 ''
 ```
 
 where:
