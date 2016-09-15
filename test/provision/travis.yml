@@ -1,6 +1,27 @@
 ---
 
 - hosts: all
+  tasks:
+  - name: install tools via apt
+    apt: name={{ item }} state=present
+    with_items:
+    - lcov
+    - libssl-dev
+    tags: [tools]
+    become: yes
+  
+  - name: install tools via pip
+    pip: name={{ item }} state=present
+    with_items:
+    - coverage
+    - urllib3
+    - pyopenssl
+    - ndg-httpsclient
+    - pyasn1
+    tags: [tools]
+    become: yes
+
+- hosts: all
   vars:
     chromedriver_version: '2.20'
     
@@ -12,21 +33,6 @@
     webrtc_install_dev: yes
     webrtc_install_dbg: yes
     webrtc_install_src: no
-    
-  tasks:
-  - name: install tools via apt
-    apt: name={{ item }} state=present
-    with_items:
-    - lcov
-    tags: [tools]
-    become: yes
-  
-  - name: install tools via pip
-    pip: name={{ item }} state=present
-    with_items:
-    - coverage
-    tags: [tools]
-    become: yes
   
   roles:
   - {role: chrome, become: yes}
