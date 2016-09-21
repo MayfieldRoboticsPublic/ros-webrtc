@@ -77,6 +77,21 @@ public:
     const std::string& peer_id() const;
 
     /**
+     * \brief Whether we are currently connecting to peer.
+     */
+    bool is_connecting() const;
+
+    /**
+     * \brief Whether we disconnected from peer.
+     */
+    bool is_disconnected() const;
+
+    /**
+     * \brief Time in seconds since state of connection to peer changed.
+     */
+    double last_connection_state_change() const;
+
+    /**
      * \brief Prefix ROS topic name for topics associated with PeerConnection.
      * \return Prefixed ROS topic name.
      */
@@ -214,13 +229,11 @@ private:
     public:
         virtual void OnSignalingChange(webrtc::PeerConnectionInterface::SignalingState new_state);
 
-        virtual void OnStateChange(StateType state_changed);
+        virtual void OnAddStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream);
 
-        virtual void OnAddStream(webrtc::MediaStreamInterface* stream);
+        virtual void OnRemoveStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream);
 
-        virtual void OnRemoveStream(webrtc::MediaStreamInterface* stream);
-
-        virtual void OnDataChannel(webrtc::DataChannelInterface* data_channel);
+        virtual void OnDataChannel(rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel);
 
         virtual void OnRenegotiationNeeded();
 
@@ -230,7 +243,10 @@ private:
 
         virtual void OnIceCandidate(const webrtc::IceCandidateInterface* candidate);
 
-        virtual void OnIceComplete();
+        virtual void OnIceCandidatesRemoved(const std::vector<cricket::Candidate>& candidates);
+
+        virtual void OnIceConnectionReceivingChange(bool receiving);
+
     };
 
     class CreateSessionDescriptionObserver :
@@ -371,6 +387,8 @@ private:
     std::string _session_id;
 
     std::string _peer_id;
+
+    double _ice_connection_changed_at;
 
     QueueSizes _queue_sizes;
 

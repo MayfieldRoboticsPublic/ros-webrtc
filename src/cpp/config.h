@@ -85,6 +85,8 @@ public:
 
     double flush_frequency; /*! Number of seconds between host/session flushes. */
 
+    double reap_frequency; /*! Number of seconds between host/connection reaps. */
+
     std::string trace_file; /*! Write WebRTC traces to this file. */
 
     uint32_t trace_mask; /*! Filter WebRTC traces using this mask. */

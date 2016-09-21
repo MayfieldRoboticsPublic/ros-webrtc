@@ -24,6 +24,26 @@ struct Flush {
 
 };
 
+struct Reap {
+
+    Reap(Host& host, double stale_threhold=30)
+        : host(host),
+          stale_threhold(stale_threhold) {
+    }
+
+    void operator()(const ros::TimerEvent& event) {
+        if (!ros::isShuttingDown()) {
+            ROS_INFO("reaping");
+            host.reap(stale_threhold);
+            ROS_INFO("reaped");
+        }
+    }
+
+    Host &host;
+    double stale_threhold;
+
+};
+
 int main(int argc, char **argv) {
     ROS_INFO("initializing ros");
     ros::init(argc, argv, "host");
@@ -71,12 +91,23 @@ int main(int argc, char **argv) {
     }
     ROS_INFO("opened host");
 
-    ROS_INFO("scheduling host flush every %0.1f sec(s) ... ", config.flush_frequency);
     Flush flush(host);
     ros::Timer flush_timer = nh.createTimer(
         ros::Duration(config.flush_frequency), flush
     );
-    flush_timer.start();
+    if (config.flush_frequency != 0) {
+        ROS_INFO("scheduling host flush every %0.1f sec(s) ... ", config.flush_frequency);
+        flush_timer.start();
+    }
+
+    Reap reap(host);
+    ros::Timer reap_timer = nh.createTimer(
+        ros::Duration(config.reap_frequency), reap
+    );
+    if (config.reap_frequency != 0) {
+        ROS_INFO("scheduling host reap every %0.1f sec(s) ... ", config.reap_frequency);
+        reap_timer.start();
+    }
 
     ROS_INFO("start spinning");
     ros::spin();

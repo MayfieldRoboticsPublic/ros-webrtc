@@ -40,6 +40,7 @@ PeerConnection::PeerConnection(
     _nn(node_name),
     _session_id(session_id),
     _peer_id(peer_id),
+    _ice_connection_changed_at(ros::Time::now().toSec()),
     _sdp_constraints(sdp_constraints),
     _pco(*this),
     _csdo(new PeerConnection::CreateSessionDescriptionObserver(*this)),
@@ -70,6 +71,34 @@ const std::string& PeerConnection::session_id() const {
 
 const std::string& PeerConnection::peer_id() const {
     return _peer_id;
+}
+
+bool PeerConnection::is_connecting() const {
+    if (_pc == nullptr) {
+        return false;
+    }
+    auto state = _pc->ice_connection_state();
+    return (
+        state == webrtc::PeerConnectionInterface::kIceConnectionNew ||
+        state == webrtc::PeerConnectionInterface::kIceConnectionChecking
+    );
+}
+
+
+bool PeerConnection::is_disconnected() const {
+    if (_pc == nullptr) {
+        return false;
+    }
+    auto state = _pc->ice_connection_state();
+    return (
+        state == webrtc::PeerConnectionInterface::kIceConnectionFailed ||
+        state == webrtc::PeerConnectionInterface::kIceConnectionDisconnected ||
+        state == webrtc::PeerConnectionInterface::kIceConnectionClosed
+    );
+}
+
+double PeerConnection::last_connection_state_change() const {
+    return _ice_connection_changed_at;
 }
 
 std::string PeerConnection::topic(const std::string &name) const {
@@ -146,7 +175,7 @@ bool PeerConnection::create_data_channel(
     rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel = _pc->CreateDataChannel(label, &init);
     if (data_channel == NULL) {
         ROS_ERROR_STREAM(
-            "pc (" << _session_id << "', '" << _peer_id << "') " <<
+            "pc('" << _session_id << "', '" << _peer_id << "') " <<
             "does not support data"
         );
         return false;
@@ -155,9 +184,7 @@ bool PeerConnection::create_data_channel(
     if (!data_channel->protocol().empty()) {
         if (!MediaType::matches(data_channel->protocol())) {
             ROS_WARN_STREAM(
-                "pc " <<
-                "session_id='" << _session_id << "', " <<
-                "peer_id='" << _peer_id << "' " <<
+                "pc('" << _session_id << "', '"<< _peer_id << "') " <<
                 "data channel w/ label='" << data_channel->label() << "'" <<
                 "has non media-type protocol='" << data_channel->protocol() << "'.";
             );
@@ -489,7 +516,7 @@ PeerConnection::PeerConnectionObserver::PeerConnectionObserver(PeerConnection& i
 }
 
 void PeerConnection::PeerConnectionObserver::OnSignalingChange(webrtc::PeerConnectionInterface::SignalingState new_state) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " signaling change - " << new_state);
+    ROS_INFO_STREAM("pc ('" << instance._session_id << "', '"<< instance._peer_id << "') signaling change - " << new_state);
 
     // callback
     if (instance._callbacks.on_signaling_state_change.exists()) {
@@ -501,40 +528,8 @@ void PeerConnection::PeerConnectionObserver::OnSignalingChange(webrtc::PeerConne
     instance._events.on_signaling_state_change.publish(ros_webrtc::SignalingState());
 }
 
-void PeerConnection::PeerConnectionObserver::OnStateChange(StateType state_changed) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " state - " << state_changed);
-
-    switch (state_changed) {
-        case StateType::kIceState: {
-            // callback
-            if (instance._callbacks.on_ice_connection_state_change.exists()) {
-                ros_webrtc::OnIceConnectionStateChange srv;
-                instance._callbacks.on_ice_connection_state_change.call(srv);
-            }
-
-            // event
-            ros_webrtc::IceConnectionState msg;
-            instance._events.on_ice_connection_state_change.publish(msg);
-            break;
-        }
-        case StateType::kSignalingState: {
-            // callback
-            if (instance._callbacks.on_signaling_state_change.exists()) {
-                ros_webrtc::OnSignalingStateChange srv;
-                instance._callbacks.on_signaling_state_change.call(srv);
-            }
-
-            // event
-            auto msg = ros_webrtc::SignalingState();
-            instance._events.on_signaling_state_change.publish(msg);
-
-            break;
-        }
-    }
-}
-
-void PeerConnection::PeerConnectionObserver::OnAddStream(webrtc::MediaStreamInterface* stream) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " add stream - label: " << stream->label());
+void PeerConnection::PeerConnectionObserver::OnAddStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
+    ROS_INFO_STREAM("pc ('" << instance._session_id << "', '"<< instance._peer_id << "') add stream - label: " << stream->label());
 
     // audio track sink
     webrtc::AudioTrackVector audio_tracks(stream->GetAudioTracks());
@@ -580,8 +575,8 @@ void PeerConnection::PeerConnectionObserver::OnAddStream(webrtc::MediaStreamInte
     instance._events.on_add_stream.publish(ros_webrtc::Stream());
 }
 
-void PeerConnection::PeerConnectionObserver::OnRemoveStream(webrtc::MediaStreamInterface* stream) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " remove stream - label: " << stream->label());
+void PeerConnection::PeerConnectionObserver::OnRemoveStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
+    ROS_INFO_STREAM("pc ('" << instance._session_id << "', '"<< instance._peer_id << "') remove stream - label: " << stream->label());
     instance._pc->RemoveStream(stream);
 
     // audio track sink
@@ -622,18 +617,16 @@ void PeerConnection::PeerConnectionObserver::OnRemoveStream(webrtc::MediaStreamI
     instance._events.on_remove_stream.publish(ros_webrtc::Stream());
 }
 
-void PeerConnection::PeerConnectionObserver::OnDataChannel(webrtc::DataChannelInterface* data_channel) {
-    ROS_INFO(
-        "session %s data channel - id: %d label: %s",
-        instance._session_id.c_str(), data_channel->id(), data_channel->label().c_str()
+void PeerConnection::PeerConnectionObserver::OnDataChannel(rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel) {
+    ROS_INFO_STREAM(
+        "pc ('" << instance._session_id << "', '"<< instance._peer_id << "') " <<
+        "data channel - id: " << data_channel->id() << " label: " << data_channel->label()
     );
     MediaType media_type;
     if (!data_channel->protocol().empty()) {
         if (!MediaType::matches(data_channel->protocol())) {
             ROS_WARN_STREAM(
-                "pc " <<
-                "session_id='" << instance._session_id << "', " <<
-                "peer_id='" << instance._peer_id << "' " <<
+                "pc (session_id='" << instance._session_id << "', peer_id='"<< instance._peer_id << "') "
                 "data channel w/ label='" << data_channel->label() << "'" <<
                 "has non media-type protocol='" << data_channel->protocol() << "'.";
             );
@@ -664,7 +657,7 @@ void PeerConnection::PeerConnectionObserver::OnDataChannel(webrtc::DataChannelIn
 }
 
 void PeerConnection::PeerConnectionObserver::OnRenegotiationNeeded() {
-    ROS_INFO_STREAM("pc " << instance._session_id << " re-negotiation needed");
+    ROS_INFO_STREAM("pc ('" << instance._session_id << "', '"<< instance._peer_id << "') re-negotiation needed");
 
     // callback
     if (instance._callbacks.on_negotiation_needed.exists()) {
@@ -677,7 +670,8 @@ void PeerConnection::PeerConnectionObserver::OnRenegotiationNeeded() {
 }
 
 void PeerConnection::PeerConnectionObserver::OnIceConnectionChange(webrtc::PeerConnectionInterface::IceConnectionState new_state) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " ice connection state - " << new_state);
+    ROS_INFO_STREAM("pc ('" << instance._session_id << "', '"<< instance._peer_id << "') ice connection state - " << new_state);
+    instance._ice_connection_changed_at = ros::Time::now().toSec();
 
     if (instance._observer != NULL) {
         instance._observer->on_connection_change(new_state);
@@ -695,7 +689,7 @@ void PeerConnection::PeerConnectionObserver::OnIceConnectionChange(webrtc::PeerC
 }
 
 void PeerConnection::PeerConnectionObserver::OnIceGatheringChange(webrtc::PeerConnectionInterface::IceGatheringState new_state) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " ice gathering state - " << new_state);
+    ROS_INFO_STREAM("pc ('" << instance._session_id << "', '"<< instance._peer_id << "') ice gathering state - " << new_state);
 
     // callback
     if (instance._callbacks.on_ice_connection_state_change.exists()) {
@@ -725,7 +719,19 @@ void PeerConnection::PeerConnectionObserver::OnIceCandidate(const webrtc::IceCan
     instance._events.on_ice_candidate.publish(msg);
 }
 
-void PeerConnection::PeerConnectionObserver::OnIceComplete() {
+void PeerConnection::PeerConnectionObserver::OnIceCandidatesRemoved(const std::vector<cricket::Candidate>& candidates) {
+    ROS_INFO_STREAM(
+        "pc ('" << instance._session_id << "', '"<< instance._peer_id << "') " <<
+        "ice candidates removed"
+    );
+}
+
+void PeerConnection::PeerConnectionObserver::OnIceConnectionReceivingChange(bool receiving) {
+    ROS_INFO_STREAM(
+        "pc ('" << instance._session_id << "', '"<< instance._peer_id << "') " <<
+        "ice connection receiving change - " <<
+        receiving
+    );
 }
 
 // PeerConnection::CreateSessionDescriptionObserver
@@ -738,7 +744,7 @@ PeerConnection::CreateSessionDescriptionObserver::~CreateSessionDescriptionObser
 }
 
 void PeerConnection::CreateSessionDescriptionObserver::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " create session description succeeded");
+    ROS_INFO_STREAM("pc('" << instance._session_id << "', '"<< instance._peer_id << "') create session description succeeded");
     if (instance._local_desc != NULL) {
         ROS_INFO_STREAM("local sdp already set, skipping");
         return;
@@ -758,7 +764,7 @@ void PeerConnection::CreateSessionDescriptionObserver::OnSuccess(webrtc::Session
 }
 
 void PeerConnection::CreateSessionDescriptionObserver::OnFailure(const std::string& error) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " create session failed - " << error);
+    ROS_INFO_STREAM("pc('" << instance._session_id << "', '"<< instance._peer_id << "') create session failed - " << error);
 }
 
 // PeerConnection::SetSessionDescriptionObserver
@@ -771,12 +777,12 @@ PeerConnection::SetSessionDescriptionObserver::~SetSessionDescriptionObserver() 
 }
 
 void PeerConnection::SetSessionDescriptionObserver::OnSuccess() {
-    ROS_INFO_STREAM("pc " << instance._session_id << " set session description succeeded");
+    ROS_INFO_STREAM("pc('" << instance._session_id << "', '"<< instance._peer_id << "') set session description succeeded");
     if (instance._pc == NULL)
         return;
     if (instance.is_offerer()) {
         if (instance._pc->remote_description() == NULL) {
-            ROS_INFO_STREAM("pc " << instance._session_id << " local sdp set succeeded");
+            ROS_INFO_STREAM("pc('" << instance._session_id << "', '"<< instance._peer_id << "') local sdp set succeeded");
             instance._on_local_description(instance._local_desc.get());
         } else {
             ROS_INFO_STREAM("remote sdp set succeeded");
@@ -785,7 +791,7 @@ void PeerConnection::SetSessionDescriptionObserver::OnSuccess() {
     }
     else {
         if (instance._pc->local_description() != NULL) {
-            ROS_INFO_STREAM("pc " << instance._session_id << " local sdp set succeeded");
+            ROS_INFO_STREAM("pc('" << instance._session_id << "', '"<< instance._peer_id << "') local sdp set succeeded");
             instance._on_local_description(instance._local_desc.get());
             instance._drain_remote_ice_candidates();
         } else {
@@ -794,7 +800,7 @@ void PeerConnection::SetSessionDescriptionObserver::OnSuccess() {
 }
 
 void PeerConnection::SetSessionDescriptionObserver::OnFailure(const std::string& error) {
-    ROS_INFO_STREAM("pc " << instance._session_id << " set description failed - " << error);
+    ROS_INFO_STREAM("pc('" << instance._session_id << "', '"<< instance._peer_id << "') set description failed - " << error);
 }
 
 // PeerConnection::Events

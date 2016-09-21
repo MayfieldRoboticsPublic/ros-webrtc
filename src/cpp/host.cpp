@@ -241,6 +241,29 @@ Host::FlushStats Host::flush() {
     return flush;
 }
 
+Host::ReapStats Host::reap(double stale_threshold) {
+    ReapStats reap;
+    double now = ros::Time::now().toSec();
+    for (auto i = _pcs.begin(); i != _pcs.end(); i++) {
+        PeerConnectionPtr pc = (*i).second;
+        if ((pc->is_connecting() || pc->is_disconnected()) &&
+            now - pc->last_connection_state_change() > stale_threshold) {
+            ROS_INFO_STREAM(
+                "scheduling stale (age=" << now - pc->last_connection_state_change() << ") " <<
+                "pc('" << pc->session_id() << "','" << pc->peer_id() << "') "
+                "for deletion"
+            );
+            PeerConnectionKey key = {pc->session_id(), pc->peer_id()};
+            ros::CallbackInterfacePtr callback(
+                new Host::DeletePeerConnectionCallback(*this, key)
+            );
+            _nh.getCallbackQueue()->addCallback(callback);
+            reap.deleted_connections += 1;
+        }
+    }
+    return reap;
+}
+
 bool Host::_create_pc_factory() {
     _network_thd = rtc::Thread::CreateWithSocketServer();
     _network_thd->SetName("network_thread", nullptr);
