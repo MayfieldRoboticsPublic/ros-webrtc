@@ -138,6 +138,14 @@ public:
 
     FlushStats flush();
 
+    struct ReapStats {
+
+        size_t deleted_connections;
+
+    };
+
+    ReapStats reap(double stale_threshold);
+
 private:
 
     class Service {
