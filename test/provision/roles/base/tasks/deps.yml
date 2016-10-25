@@ -20,6 +20,7 @@
   - iftop
   - python2.7-dev
   - lcov
+  - libssl-dev
   tags: [tools]
   become: yes
 
@@ -32,4 +33,14 @@
   shell: "curl https://bootstrap.pypa.io/get-pip.py | python"
   args:
     creates: /usr/local/bin/pip
+  become: yes
+
+- name: install python modules needed for SSL SNI
+  pip: name={{ item }} state=latest
+  with_items:
+  - urllib3
+  - pyopenssl
+  - ndg-httpsclient
+  - pyasn1
+  tags: [tools]
   become: yes

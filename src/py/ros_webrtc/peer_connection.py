@@ -256,6 +256,7 @@ class RTCPeerConnectionCallbacks(object):
         resp = ros_webrtc.srv.OnSignalingStateChangeResponse()
         return resp
 
+
 class RTCPeerConnectionEvents(object):
 
     def __init__(self, pc):

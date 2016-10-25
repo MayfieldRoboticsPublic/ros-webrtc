@@ -63,6 +63,14 @@ Config Config::get(ros::NodeHandle& nh) {
         }
     }
 
+    // reap_frequency
+    instance.reap_frequency = 15;  // 15 seconds
+    if (nh.hasParam("reap_frequency")) {
+        if (!nh.getParam("reap_frequency", instance.reap_frequency)) {
+            ROS_WARN("'reap_frequency' param type not int");
+        }
+    }
+
     // trace_file
     instance.trace_file.clear();  // empty
     if (nh.hasParam("trace/file")) {
