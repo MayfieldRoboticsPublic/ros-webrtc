@@ -130,7 +130,7 @@ public:
 
     struct FlushStats {
 
-        size_t reaped_data_messages;
+        size_t reaped_data_messages = 0;
 
         FlushStats& operator += (const PeerConnection::FlushStats & rhs);
 
@@ -140,7 +140,7 @@ public:
 
     struct ReapStats {
 
-        size_t deleted_connections;
+        size_t deleted_connections = 0;
 
     };
 

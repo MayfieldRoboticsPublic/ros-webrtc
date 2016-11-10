@@ -14,9 +14,13 @@ struct Flush {
 
     void operator()(const ros::TimerEvent& event) {
         if (!ros::isShuttingDown()) {
-            ROS_INFO("flushing");
-            host.flush();
-            ROS_INFO("flushed");
+            auto stats = host.flush();
+            if (stats.reaped_data_messages) {
+                ROS_INFO(
+                    "flushed - reaped_data_messages=%zu",
+                    stats.reaped_data_messages
+                );
+            }
         }
     }
 
@@ -33,9 +37,13 @@ struct Reap {
 
     void operator()(const ros::TimerEvent& event) {
         if (!ros::isShuttingDown()) {
-            ROS_INFO("reaping");
-            host.reap(stale_threhold);
-            ROS_INFO("reaped");
+            auto stats = host.reap(stale_threhold);
+            if (stats.deleted_connections) {
+                ROS_INFO(
+                    "reaped - deleted_connections=%zu",
+                    stats.deleted_connections
+                );
+            }
         }
     }
 
