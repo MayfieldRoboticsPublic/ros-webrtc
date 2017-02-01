@@ -7,6 +7,10 @@
     with_items:
     - lcov
     - libssl-dev
+    - libjsoncpp0
+    - libjsoncpp-dev
+    - libjingle555cfe9
+    - libjingle555cfe9-dev
     tags: [tools]
     become: yes
   
