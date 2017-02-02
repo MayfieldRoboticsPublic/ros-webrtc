@@ -65,7 +65,7 @@
 
 - hosts: all
   vars:
-    chromedriver_version: '2.20'
+    chromedriver_version: '2.25'
     
     ros_webrtc_src_dir: "{{ lookup('env', 'TRAVIS_CI_PATH') }}"
     ros_webrtc_workspace_dir: "{{ lookup('env', 'TRAVIS_WS_PATH') }}"
