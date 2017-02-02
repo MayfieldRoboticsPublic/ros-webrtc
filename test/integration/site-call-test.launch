@@ -1,0 +1,31 @@
+<launch>
+    <group ns="ros_webrtc_site_call_test">
+        <!-- params -->
+        <rosparam ns="cameras" file="$(find ros_webrtc)/test/fixtures/params/cameras.yaml" />
+        <rosparam ns="peer_connection" file="$(find ros_webrtc)/test/fixtures/params/peer_connection.yaml" />
+        <rosparam ns="ice_servers" file="$(find ros_webrtc)/test/fixtures/params/ice_servers.yaml" />
+        <param name="flush_frequency"  value="$(optenv ROS_WEBRTC_TEST_FLUSH_FREQUENCY 60.0)" type="double" />
+        <param name="signal_port" value="9002" type="int" />
+        <param name="signal_host" value="127.0.0.1" type="str" />
+        <param name="peer_id" value="blabbermouth" type="str" />
+        
+        <!-- nodes -->
+        <node name="play" pkg="rosbag" type="play" args="$(find ros_webrtc)/test/fixtures/bags/sim_2015-02-23-15-14-55.bag --loop" />
+        <node name="host" pkg="ros_webrtc" type="ros_webrtc_host" output="screen" />
+        <node name="signaling" pkg="ros_webrtc" type="ros_webrtc_signaling" output="screen">
+            <remap from="~host" to="signal_host"/>
+            <remap from="~port" to="signal_port"/>
+        </node>
+        <node name="example" pkg="ros_webrtc" type="ros_webrtc_example" output="screen">
+            <remap from="~id" to="peer_id"/>
+            <remap from="~host" to="signal_host"/>
+            <remap from="~port" to="signal_port"/>
+        </node>
+        
+        <!-- test -->
+        <test test-name="site_test" pkg="ros_webrtc" type="site_test.py" time-limit="600.0" args="call --cov">
+            <param name="dist" value="$(find ros_webrtc)/test/fixtures/site/dist" type="str" />
+            <param name="headless" value="1" type="bool" />
+        </test>
+    </group>
+</launch>
