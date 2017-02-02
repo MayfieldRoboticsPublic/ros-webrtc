@@ -14,7 +14,7 @@
     become: yes
 
   - name: add mayfield apt repo key
-    apt_key: data="{{ lookup('file', 'deb-dev.pub')  }}" id=23B3AFDE state=present
+    apt_key: data="{{ lookup('file', './deb-dev.pub')  }}" id=23B3AFDE state=present
     become: yes
 
   # setup repo for 'develop' branch
