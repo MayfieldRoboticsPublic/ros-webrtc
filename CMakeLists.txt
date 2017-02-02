@@ -256,8 +256,6 @@ if(CATKIN_ENABLE_TESTING)
   foreach(T
       test/integration/host-test.launch
       test/integration/peer-connection-test.launch
-      test/integration/site-call-test.launch
-      test/integration/site-wait-test.launch
     )
     add_rostest(${T})
   endforeach()
