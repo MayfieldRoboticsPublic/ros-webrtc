@@ -17,13 +17,9 @@
     apt_key: data="{{ lookup('file', './deb-dev.pub')  }}" id=23B3AFDE state=present
     become: yes
 
-  # setup repo for 'develop' branch
-  - apt_repository: repo='deb ssh://packages.c2x.io:/home/debs/{{ deb_repo }} trusty main' state=present
-    become: yes
-
   # setup repo for debs from 3rd parties
   - name: add 3rd party deb repo
-    apt_repository: repo='deb ssh://packages.c2x.io:/home/debs/vendor trusty main' state=present
+    apt_repository: repo='deb ssh://packages.c2x.io:/home/debs/repo develop ubuntu ros vendor' state=present
     become: yes
 
   - name: install tools via apt
