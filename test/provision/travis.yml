@@ -12,7 +12,7 @@
       create: yes
       mode: 0644
       dest: ~root/.ssh/config
-        block: |
+      block: |
         Host packages.c2x.io
         User debs
         IdentityFile ~/.ssh/id_rsa_debs
