@@ -438,7 +438,6 @@ class TestSiteCall(TestSite):
 
 
 def main():
-    return
     rospy.init_node(NAME)
 
     if len(sys.argv) == 1:
