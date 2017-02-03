@@ -13,6 +13,3 @@
 
 - src: https://github.com/DrTom/ansible-role-chromedriver.git
   name: chrome-driver
-
-- src: https://github.com/mayfieldrobotics/ansible-webrtc.git
-  name: webrtc
