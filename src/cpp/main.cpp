@@ -9,6 +9,7 @@
 
 #include <malloc.h>
 #include <sys/resource.h>
+#include <stdio.h>
 
 
 struct Flush {
@@ -46,6 +47,25 @@ struct Reap {
                     "reaped - deleted_connections=%zu",
                     stats.deleted_connections
                 );
+            }
+            // After reaping, check our OOM score to
+            //  see if we are running away with memory
+            static FILE* proc_file;
+            if(!proc_file) {
+                char proc_path[128];
+                int pidnum = (int)getpid();
+                snprintf(proc_path,sizeof(proc_path)-1,
+                         "/proc/%d/oom_score",pidnum);
+                proc_file = fopen(proc_path,"r");
+            }
+            rewind(proc_file);
+            int oom_score;
+            fscanf(proc_file,"%d",&oom_score);
+            if(oom_score > 400) {
+                ROS_INFO(
+                    "Memory went over limit (%d percent)",oom_score/10
+                );
+                abort();
             }
         }
     }
