@@ -2,11 +2,53 @@
 
 - hosts: all
   tasks:
+
+  # setup ssh keys
+  - file: path=~root/.ssh state=directory mode=0700
+    become: yes
+
+  - name: add deb server key to ssh config
+    blockinfile:
+      create: yes
+      mode: 0644
+      dest: ~root/.ssh/config
+      block: |
+        Host packages.c2x.io
+        User debs
+        IdentityFile ~/.ssh/id_rsa_debs
+    become: yes
+
+  - copy: src=root_ssh_id_rsa_debs dest=~root/.ssh/id_rsa_debs mode=0600
+    become: yes
+
+  - name: add debs server to known_hosts
+    blockinfile:
+      create: yes
+      mode: 0644
+      dest: ~root/.ssh/known_hosts
+      block: |
+        packages.c2x.io ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDm3OOJpPV5X5FD3+f/bNKjhjmOHtEONs8frhOxvXzN4TpJZoNMw7ywODjEetBnmBh/8pRLLs21DbiPkRvltpNjTNWRB8n2+W+hl074jOLE3UkNhxzzIRnY2EUTOdVzWQuplqwEvQ3UzfHz5W5OJgZcXj3VsMmUw+aMPrxgCz1WCpzGa/KKIOzI4TGmdh0DuAimtrNZ4ASTF1Z7ajV7D8pHeoEgG9a4UJsuezfu0fjttdpMg+6WXhvZwyv2UMFiUaHzt1XdhJm4zcppoNXm02u1WNTG+dDlGuBemFVYGs6/jwvIRfzRK7oo9PeGXxdfY9o4e9C39QbugvEDIoXAchOJ
+        packages.c2x.io ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBNu7Swh/msqM0IAFFn9pDdwHknwkxsgQeQOqO23W/Fk43J+6octIH6PO/jSqNtuVOfvEMG4rNACIZu/GImDWZHU=
+    become: yes
+
+  - name: add mayfield apt repo key
+    apt_key: data="{{ lookup('file', './deb-dev.pub')  }}" id=23B3AFDE state=present
+    become: yes
+
+  # setup repo for debs from 3rd parties
+  - name: add 3rd party deb repo
+    apt_repository: repo='deb ssh://packages.c2x.io:/home/debs/repo develop ubuntu ros vendor' state=present
+    become: yes
+
   - name: install tools via apt
     apt: name={{ item }} state=present
     with_items:
     - lcov
     - libssl-dev
+    - libjsoncpp0
+    - libjsoncpp-dev
+    - libjingle555cfe9
+    - libjingle555cfe9-dev
     tags: [tools]
     become: yes
   
@@ -23,7 +65,7 @@
 
 - hosts: all
   vars:
-    chromedriver_version: '2.20'
+    chromedriver_version: '2.25'
     
     ros_webrtc_src_dir: "{{ lookup('env', 'TRAVIS_CI_PATH') }}"
     ros_webrtc_workspace_dir: "{{ lookup('env', 'TRAVIS_WS_PATH') }}"
@@ -38,6 +80,5 @@
   - {role: chrome, become: yes}
   - {role: chrome-driver, become: yes}
   - nodejs
-  - {role: webrtc, become: yes}
   - {role: ros, become: yes}
   - ros-webrtc

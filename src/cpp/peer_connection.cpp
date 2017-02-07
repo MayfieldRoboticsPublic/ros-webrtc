@@ -744,6 +744,8 @@ PeerConnection::CreateSessionDescriptionObserver::~CreateSessionDescriptionObser
 }
 
 void PeerConnection::CreateSessionDescriptionObserver::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
+    // We now own |desc| by the calling convention
+    std::unique_ptr<webrtc::SessionDescriptionInterface> own(desc);
     ROS_INFO_STREAM("pc('" << instance._session_id << "', '"<< instance._peer_id << "') create session description succeeded");
     if (instance._local_desc != NULL) {
         ROS_INFO_STREAM("local sdp already set, skipping");

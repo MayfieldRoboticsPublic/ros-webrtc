@@ -7,6 +7,9 @@
 #include "config.h"
 #include "host.h"
 
+#include <malloc.h>
+#include <sys/resource.h>
+
 
 struct Flush {
 
@@ -61,6 +64,7 @@ int main(int argc, char **argv) {
     ROS_INFO("loading config");
     Config config(Config::get(nh));
 
+
     if (!config.trace_file.empty()) {
         ROS_INFO(
             "setting webrtc trace file to %s w/ mask 0x%04x",
@@ -74,6 +78,17 @@ int main(int argc, char **argv) {
     ROS_INFO("initializing ssl");
     if (!rtc::InitializeSSL()) {
         ROS_ERROR("ssl initialization failed");
+        return 1;
+    }
+
+    struct rlimit corelimit = {0x70000000,0x70000000};
+    if(setrlimit(RLIMIT_CORE,&corelimit) < 0) {
+        ROS_ERROR("%s",strerror(errno));
+        return 1;
+    }
+    struct rlimit aslimit = {0x70000000,0x70000000};
+    if(setrlimit(RLIMIT_AS,&corelimit) < 0) {
+        ROS_ERROR("%s",strerror(errno));
         return 1;
     }
 
