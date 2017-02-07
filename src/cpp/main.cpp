@@ -9,6 +9,7 @@
 
 #include <malloc.h>
 #include <sys/resource.h>
+#include <stdio.h>
 
 
 struct Flush {
@@ -55,6 +56,36 @@ struct Reap {
 
 };
 
+struct MemMonitor {
+
+    MemMonitor(void*) {}
+
+    void operator()(const ros::TimerEvent& event) {
+        if (!ros::isShuttingDown()) {
+            // Check our OOM score to
+            //  see if we are running away with memory
+            static FILE* proc_file;
+            if(!proc_file) {
+                char proc_path[128];
+                int pidnum = (int)getpid();
+                snprintf(proc_path,sizeof(proc_path)-1,
+                         "/proc/%d/oom_score",pidnum);
+                proc_file = fopen(proc_path,"r");
+            }
+            rewind(proc_file);
+            fflush(proc_file);
+            int oom_score;
+            fscanf(proc_file,"%d",&oom_score);
+            if(oom_score > 400) {
+                ROS_FATAL(
+                    "Memory went over limit (%d percent)",oom_score/10
+                );
+                abort();
+            }
+        }
+    }
+};
+
 int main(int argc, char **argv) {
     ROS_INFO("initializing ros");
     ros::init(argc, argv, "host");
@@ -83,11 +114,6 @@ int main(int argc, char **argv) {
 
     struct rlimit corelimit = {0x70000000,0x70000000};
     if(setrlimit(RLIMIT_CORE,&corelimit) < 0) {
-        ROS_ERROR("%s",strerror(errno));
-        return 1;
-    }
-    struct rlimit aslimit = {0x70000000,0x70000000};
-    if(setrlimit(RLIMIT_AS,&corelimit) < 0) {
         ROS_ERROR("%s",strerror(errno));
         return 1;
     }
@@ -131,6 +157,12 @@ int main(int argc, char **argv) {
         ROS_INFO("scheduling host reap every %0.1f sec(s) ... ", config.reap_frequency);
         reap_timer.start();
     }
+
+    MemMonitor monitor(NULL);
+    ros::Timer mem_timer = nh.createTimer(
+        ros::Duration(1.0), monitor
+    );
+    mem_timer.start();
 
     ROS_INFO("start spinning");
     ros::spin();
