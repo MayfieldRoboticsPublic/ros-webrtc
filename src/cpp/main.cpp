@@ -48,7 +48,21 @@ struct Reap {
                     stats.deleted_connections
                 );
             }
-            // After reaping, check our OOM score to
+        }
+    }
+
+    Host &host;
+    double stale_threhold;
+
+};
+
+struct MemMonitor {
+
+    MemMonitor(void*) {}
+
+    void operator()(const ros::TimerEvent& event) {
+        if (!ros::isShuttingDown()) {
+            // Check our OOM score to
             //  see if we are running away with memory
             static FILE* proc_file;
             if(!proc_file) {
@@ -59,6 +73,7 @@ struct Reap {
                 proc_file = fopen(proc_path,"r");
             }
             rewind(proc_file);
+            fflush(proc_file);
             int oom_score;
             fscanf(proc_file,"%d",&oom_score);
             if(oom_score > 400) {
@@ -69,10 +84,6 @@ struct Reap {
             }
         }
     }
-
-    Host &host;
-    double stale_threhold;
-
 };
 
 int main(int argc, char **argv) {
@@ -103,11 +114,6 @@ int main(int argc, char **argv) {
 
     struct rlimit corelimit = {0x70000000,0x70000000};
     if(setrlimit(RLIMIT_CORE,&corelimit) < 0) {
-        ROS_ERROR("%s",strerror(errno));
-        return 1;
-    }
-    struct rlimit aslimit = {0xA0000000,0xA0000000};
-    if(setrlimit(RLIMIT_AS,&corelimit) < 0) {
         ROS_ERROR("%s",strerror(errno));
         return 1;
     }
@@ -151,6 +157,12 @@ int main(int argc, char **argv) {
         ROS_INFO("scheduling host reap every %0.1f sec(s) ... ", config.reap_frequency);
         reap_timer.start();
     }
+
+    MemMonitor monitor(NULL);
+    ros::Timer mem_timer = nh.createTimer(
+        ros::Duration(1.0), monitor
+    );
+    mem_timer.start();
 
     ROS_INFO("start spinning");
     ros::spin();
