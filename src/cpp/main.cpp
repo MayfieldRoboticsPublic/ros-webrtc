@@ -77,7 +77,7 @@ struct MemMonitor {
             int oom_score;
             fscanf(proc_file,"%d",&oom_score);
             if(oom_score > 400) {
-                ROS_INFO(
+                ROS_FATAL(
                     "Memory went over limit (%d percent)",oom_score/10
                 );
                 abort();
