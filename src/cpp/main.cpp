@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
         ROS_ERROR("%s",strerror(errno));
         return 1;
     }
-    struct rlimit aslimit = {0x70000000,0x70000000};
+    struct rlimit aslimit = {0xA0000000,0xA0000000};
     if(setrlimit(RLIMIT_AS,&corelimit) < 0) {
         ROS_ERROR("%s",strerror(errno));
         return 1;
