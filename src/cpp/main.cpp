@@ -160,7 +160,7 @@ int main(int argc, char **argv) {
 
     MemMonitor monitor(NULL);
     ros::Timer mem_timer = nh.createTimer(
-        ros::Duration(1.0), monitor
+        ros::Duration(0.1), monitor
     );
     mem_timer.start();
 
