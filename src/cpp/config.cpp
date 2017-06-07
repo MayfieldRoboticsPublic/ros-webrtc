@@ -152,6 +152,9 @@ bool Config::_get(ros::NodeHandle& nh, const std::string& root, VideoSource& val
     } else if (value.name.find("ros://") == 0) {
         value.name = value.name.substr(6);
         value.type = VideoSource::ROSType;
+    } else if (value.name.find("madmux://") == 0) {
+        value.name = value.name.substr(9);
+        value.type = VideoSource::MuxType;
     } else {
         value.type = VideoSource::NameType;
     }
