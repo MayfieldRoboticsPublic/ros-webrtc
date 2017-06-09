@@ -5,7 +5,7 @@
 
   # setup repo for debs from 3rd parties
   - apt_key:
-      url: "https://s3-us-west-2.amazonaws.com/apt-tm8ji0.c2x.io/1D33909E.asc"
+      url: "https://s3-us-west-2.amazonaws.com/apt-tm8ji0.c2x.io/D613DCD5.asc"
       state: present
     become: yes
 
