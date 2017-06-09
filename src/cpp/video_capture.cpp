@@ -224,6 +224,171 @@ void ROSVideoCaptureModule::CaptureThread::Run() {
     }
 }
 
+#ifdef USE_MADMUX
+// GeoVideoCaptureModule
+
+GeoVideoCaptureModule::GeoVideoCaptureModule(int32_t id)
+    : VideoCaptureImpl(id)
+    , _capture_cs(webrtc::CriticalSectionWrapper::CreateCriticalSection())
+    , _capturing(false)
+{ }
+
+GeoVideoCaptureModule::~GeoVideoCaptureModule()
+{
+    StopCapture();
+    if (_capture_cs) {
+        delete _capture_cs;
+        _capture_cs = NULL;
+    }
+}
+
+int32_t GeoVideoCaptureModule::init(const char* device)
+{
+    _stream = mdx_open(GEO_CAM_SOCK);
+
+    return 0;
+}
+
+void GeoVideoCaptureModule::_madmux_video_cb(uint8_t* buffer, uint32_t size,
+        void* user_data)
+{
+    GeoVideoCaptureModule* mod = static_cast<GeoVideoCaptureModule*>(user_data);
+    mod->_video_cb(buffer, size);
+}
+
+void GeoVideoCaptureModule::_video_cb(uint8_t* buffer, uint32_t size)
+{
+    webrtc::VideoCaptureCapability frameInfo;
+    frameInfo.width = GEO_CAM_WIDTH;
+    frameInfo.height = GEO_CAM_HEIGHT;
+    frameInfo.rawType = webrtc::kVideoMJPEG;
+
+    // convert to to I420 if needed
+    IncomingFrame(buffer, size, frameInfo);
+}
+
+rtc::scoped_refptr<webrtc::VideoCaptureModule> GeoVideoCaptureModule::Create(
+        const int32_t id, const char* device)
+{
+    rtc::scoped_refptr<GeoVideoCaptureModule> obj =
+        new rtc::RefCountedObject<GeoVideoCaptureModule>(id);
+    if (!obj || obj->init(device) != 0) {
+        obj = NULL;
+    }
+    return obj;
+}
+
+int32_t GeoVideoCaptureModule::StartCapture(const webrtc::VideoCaptureCapability& capability) {
+    if (_capturing) {
+        if (capability.width == _capability.width &&
+            capability.height == _capability.height &&
+            capability.rawType == _capability.rawType) {
+            // already started w/ same profile
+            return 0;
+        } else {
+            // profile changes, so stop
+            StopCapture();
+        }
+    }
+
+    webrtc::CriticalSectionScoped cs(_capture_cs);
+
+    // start capture thread
+    mdx_register_cb(_stream, &GeoVideoCaptureModule::_madmux_video_cb, this);
+
+    // done
+    _capability = capability;
+    _capturing = true;
+
+    return 0;
+}
+
+int32_t GeoVideoCaptureModule::StopCapture() {
+    webrtc::CriticalSectionScoped cs(_capture_cs);
+
+    if (_capturing) {
+        _capturing = false;
+        mdx_register_cb(_stream, nullptr, nullptr);
+    }
+
+    return 0;
+}
+
+bool GeoVideoCaptureModule::CaptureStarted() {
+    return _capturing;
+}
+
+int32_t GeoVideoCaptureModule::CaptureSettings(webrtc::VideoCaptureCapability& settings) {
+    settings = _capability;
+    return 0;
+}
+
+// GeoVcmFactory
+
+/**
+ * \brief cricket::WebRtcVcmFactoryInterface implementation for tracking GeoVideoCaptureModule
+ */
+class GeoVcmFactory : public cricket::WebRtcVcmFactoryInterface {
+
+public:
+
+    GeoVcmFactory( const cricket::Device& device,
+            VideoCaptureModuleRegistryPtr module_reg)
+        : _device_id(device.id)
+        , _module_reg(module_reg)
+    { }
+
+private:
+
+    std::string _device_id;
+    VideoCaptureModuleRegistryPtr _module_reg;
+
+// cricket::WebRtcVcmFactoryInterface
+
+public:
+
+    virtual rtc::scoped_refptr<webrtc::VideoCaptureModule> Create(int id, const char* device) {
+        rtc::scoped_refptr<webrtc::VideoCaptureModule> module(
+            GeoVideoCaptureModule::Create(id, device)
+        );
+        if (_module_reg != NULL) {
+            _module_reg->add(_device_id, module.get());
+        }
+        return module;
+    }
+
+    virtual webrtc::VideoCaptureModule::DeviceInfo* CreateDeviceInfo(int id) {
+        return webrtc::VideoCaptureFactory::CreateDeviceInfo(id);
+    }
+
+    virtual void DestroyDeviceInfo(webrtc::VideoCaptureModule::DeviceInfo* info) {
+        if (info) {
+            delete info;
+        }
+    }
+
+};
+
+// GeoVideoDeviceCapturerFactor
+
+GeoVideoDeviceCapturerFactory::GeoVideoDeviceCapturerFactory (
+    VideoCaptureModuleRegistryPtr module_reg)
+    : _module_reg(module_reg)
+{ }
+
+cricket::VideoCapturer* GeoVideoDeviceCapturerFactory::Create(const cricket::Device& device) {
+    std::unique_ptr<cricket::WebRtcVideoCapturer> capturer(
+        new cricket::WebRtcVideoCapturer(
+            new GeoVcmFactory(device, _module_reg)
+        )
+    );
+    if (capturer->Init(device) < 0) {
+        return NULL;
+    }
+    return capturer.release();
+}
+#endif // USE_MADMUX
+
 // WebRTCVideoCaptureDevices
 
 void WebRTCVideoCaptureDeviceInfo::scan(std::vector<WebRTCVideoCaptureDeviceInfo> &infos) {
