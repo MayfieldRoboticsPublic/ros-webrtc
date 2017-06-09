@@ -5,12 +5,12 @@
 
   # setup repo for debs from 3rd parties
   - apt_key:
-    url: "https://s3-us-west-2.amazonaws.com/apt-tm8ji0.c2x.io/1D33909E.asc"
-    state: present
+      url: "https://s3-us-west-2.amazonaws.com/apt-tm8ji0.c2x.io/1D33909E.asc"
+      state: present
     become: yes
 
   - name: add 3rd party deb repo
-    apt_repository: repo='http://apt-tm8ji0.c2x.io trusty unstable'
+    apt_repository: repo='http://apt-tm8ji0.c2x.io trusty unstable' state=present
     become: yes
 
   - name: install tools via apt
