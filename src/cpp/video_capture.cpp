@@ -1,5 +1,6 @@
 #include "video_capture.h"
 
+#include <cerrno>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv/cv.hpp>
 #include <sensor_msgs/Image.h>
@@ -245,6 +246,11 @@ GeoVideoCaptureModule::~GeoVideoCaptureModule()
 int32_t GeoVideoCaptureModule::init(const char* device)
 {
     _stream = mdx_open(GEO_CAM_SOCK);
+    if (!_stream) {
+        ROS_ERROR("could not open madmux channel %s (errno %d)",
+            GEO_CAM_SOCK, errno);
+        return -1;
+    }
 
     return 0;
 }
