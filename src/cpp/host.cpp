@@ -394,7 +394,6 @@ bool Host::_open_media() {
             }
 #ifdef USE_MADMUX
             case VideoSource::MuxType: {
-                ROS_INFO("yeeee %s", video_src.name.c_str());
                 auto video0 = webrtc_video_capture_devices.begin();
                 device.id = video0->unique_id;
                 device.name = video0->name;
