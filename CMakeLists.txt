@@ -13,6 +13,12 @@ find_package(catkin REQUIRED COMPONENTS
   bondcpp
 )
 
+set(USE_MADMUX false CACHE BOOL "use madmux")
+if(USE_MADMUX)
+    find_package(madmux REQUIRED)
+    add_definitions("-DUSE_MADMUX")
+endif()
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(PkgConfig REQUIRED COMPONENTS system)
@@ -150,6 +156,7 @@ include_directories(
   ${jingle_INCLUDE_DIRS}
   ${jsoncpp_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  ${madmux_INCLUDE_DIRS}
 )
 
 ## Declare a cpp library
@@ -185,6 +192,7 @@ target_link_libraries(ros_webrtc_host
   ${jsoncpp_STATIC_LDFLAGS}
   ${OpenCV_LIBRARIES}
   ${CMAKE_DL_LIBS}
+  ${madmux_LIBRARIES}
 )
 
 ## Specify additional compile flags

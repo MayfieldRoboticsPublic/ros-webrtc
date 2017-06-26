@@ -1,6 +1,5 @@
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
-#include <cpp/peer_connection.h>
 #include <ros/ros.h>
 #include <ros_webrtc/Close.h>
 #include <ros_webrtc/DataChannel.h>

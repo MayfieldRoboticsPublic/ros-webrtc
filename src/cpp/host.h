@@ -28,7 +28,8 @@ struct VideoSource {
     enum Type {
         NameType = 0,
         IdType,
-        ROSType
+        ROSType,
+        MuxType,
     };
 
     VideoSource();
