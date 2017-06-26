@@ -33,7 +33,7 @@ install:
 - cd test/provision
 - sudo pip install "ansible >=2,<3"
 - ansible-galaxy install -r requirements.yml
-- ansible-playbook -i "localhost," -c local travis.yml
+- ansible-playbook -vvv -i "localhost," -c local travis.yml
 
 script:
 # tests
