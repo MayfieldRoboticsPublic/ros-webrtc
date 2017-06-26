@@ -16,6 +16,11 @@
 #include <webrtc/modules/video_capture/video_capture_impl.h>
 #include <webrtc/system_wrappers/include/critical_section_wrapper.h>
 
+#ifdef USE_MADMUX
+#include <madmux/madmux.h>
+#include "geocam_cfg.h"
+#endif
+
 /**
  * \brief Maps cricket::VideoCapturer to their associated cricket::VideoCaptureModule.
  */
@@ -49,6 +54,84 @@ private:
 
 typedef std::shared_ptr<VideoCaptureModuleRegistry> VideoCaptureModuleRegistryPtr;
 
+#ifdef USE_MADMUX
+
+/**
+ * \brief Allows capturing frames from GEO semi cameras
+ *
+ * They use their own API (mxuvc) to get camera frames.
+ */
+class GeoVideoCaptureModule : public webrtc::videocapturemodule::VideoCaptureImpl {
+
+public:
+
+    GeoVideoCaptureModule(int32_t id);
+
+    virtual ~GeoVideoCaptureModule();
+
+    /**
+     * \brief Initialize mxuvc
+     *
+     * \param socket    /var/run/madmux/chX.sock
+     *
+     * \returns 0 on success, non-0 otherwise.
+     */
+    int32_t init(const char* socket);
+
+private:
+
+    static void _madmux_video_cb(uint8_t* buffer, uint32_t size, void* user_data);
+    void _video_cb(uint8_t* buffer, uint32_t size);
+
+    webrtc::VideoCaptureCapability _capability;
+
+    webrtc::CriticalSectionWrapper* _capture_cs;
+
+    bool _capturing;
+
+    struct mdx_stream* _stream;
+
+// webrtc::videocapturemodule::VideoCaptureImpl
+
+public:
+
+    static rtc::scoped_refptr<VideoCaptureModule> Create(const int32_t id,
+            const char* device);
+
+    static DeviceInfo* CreateDeviceInfo(const int32_t id);
+
+    virtual int32_t StartCapture(const webrtc::VideoCaptureCapability& capability);
+
+    virtual int32_t StopCapture();
+
+    virtual bool CaptureStarted();
+
+    virtual int32_t CaptureSettings(webrtc::VideoCaptureCapability& settings);
+
+};
+
+/**
+ * \brief cricket::GeoVideoDeviceCapturerFactory specialization for GEO Semi
+ */
+class GeoVideoDeviceCapturerFactory : public cricket::WebRtcVideoDeviceCapturerFactory {
+
+public:
+
+    GeoVideoDeviceCapturerFactory(VideoCaptureModuleRegistryPtr module_reg);
+
+private:
+
+    VideoCaptureModuleRegistryPtr _module_reg;
+
+// cricket::WebRtcVideoDeviceCapturerFactory
+
+public:
+
+    virtual cricket::VideoCapturer* Create(const cricket::Device& device);
+
+};
+
+#endif // USE_MADMUX
 
 /**
  * \brief Represents a ROS topics as a WebRTC video capture device.

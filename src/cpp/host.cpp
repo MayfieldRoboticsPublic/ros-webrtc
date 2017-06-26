@@ -362,6 +362,11 @@ bool Host::_open_media() {
         _video_capture_modules,
         ros_video_capture_topics
     );
+#ifdef USE_MADMUX
+    GeoVideoDeviceCapturerFactory geo_video_capturer_factory(
+        _video_capture_modules
+    );
+#endif
     cricket::WebRtcVideoDeviceCapturerFactory *video_capturer_factory = NULL;
     for (size_t i = 0; i != _video_srcs.size(); i++) {
         VideoSource& video_src = _video_srcs[i];
@@ -387,6 +392,15 @@ bool Host::_open_media() {
                 video_capturer_factory = &webrtc_video_capturer_factory;
                 break;
             }
+#ifdef USE_MADMUX
+            case VideoSource::MuxType: {
+                auto video0 = webrtc_video_capture_devices.begin();
+                device.id = video0->unique_id;
+                device.name = video0->name;
+                video_capturer_factory = &geo_video_capturer_factory;
+                break;
+            }
+#endif
             case VideoSource::IdType: {
                 auto j = std::find_if(
                     webrtc_video_capture_devices.begin(),
