@@ -1,0 +1,3 @@
+---
+jingle_apt_repo: "http://apt-tm8ji0.c2x.io"
+jingle_apt_key: "http://apt-tm8ji0.c2x.io/D613DCD5.asc"
