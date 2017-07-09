@@ -1,0 +1,20 @@
+---
+
+# setup repo for debs from 3rd parties
+- apt_key:
+    url: "{{ jingle_apt_key }}"
+    state: present
+
+- name: add 3rd party deb repo
+  apt_repository:
+    repo: "deb {{ jingle_apt_repo }} trusty unstable"
+    state: present
+
+- name: install tools via apt
+  apt: name={{ item }} state=present
+  with_items:
+  - libjsoncpp0
+  - libjsoncpp-dev
+  - libjingle555cfe9
+  - libjingle555cfe9-dev
+  tags: [tools]

@@ -3,25 +3,11 @@
 - hosts: all
   tasks:
 
-  # setup repo for debs from 3rd parties
-  - apt_key:
-      url: "https://s3-us-west-2.amazonaws.com/apt-tm8ji0.c2x.io/D613DCD5.asc"
-      state: present
-    become: yes
-
-  - name: add 3rd party deb repo
-    apt_repository: repo='deb http://apt-tm8ji0.c2x.io trusty unstable' state=present
-    become: yes
-
   - name: install tools via apt
     apt: name={{ item }} state=present
     with_items:
     - lcov
     - libssl-dev
-    - libjsoncpp0
-    - libjsoncpp-dev
-    - libjingle555cfe9
-    - libjingle555cfe9-dev
     tags: [tools]
     become: yes
 
@@ -53,5 +39,6 @@
   - {role: chrome, become: yes}
   - {role: chrome-driver, become: yes}
   - nodejs
+  - {role: webrtc, become: yes}
   - {role: ros, become: yes}
   - ros-webrtc
