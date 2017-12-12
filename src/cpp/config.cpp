@@ -47,7 +47,7 @@ Config Config::get(ros::NodeHandle& nh) {
     if (nh.getParam("ice_servers", ice_servers_xml)) {
         for (size_t i = 0; i != ice_servers_xml.size(); i++) {
             webrtc::PeerConnectionInterface::IceServer ice_server;
-            if (_get(nh, ice_servers_xml[0], ice_server)) {
+            if (_get(nh, ice_servers_xml[i], ice_server)) {
                 instance.ice_servers.push_back(ice_server);
             }
         }
