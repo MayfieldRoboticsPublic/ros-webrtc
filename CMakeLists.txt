@@ -77,6 +77,7 @@ add_message_files(
   ExampleCall.msg
   IceCandidate.msg
   IceConnectionState.msg
+  IceServer.msg
   MediaConstraints.msg
   PeerConnectionKey.msg
   PeerConnection.msg
@@ -110,6 +111,7 @@ add_service_files(
   OnSignalingStateChange.srv
   RotateVideoSource.srv
   SendData.srv
+  SetIceServers.srv
   SetRemoteDescription.srv
 )
 
@@ -258,7 +260,7 @@ if(CATKIN_ENABLE_TESTING)
     FILENAME sim_2015-02-23-15-14-55.bag
     MD5 1832f700f1066590f0323bceda474bd7
   )
-  
+
   ## Integration
   find_package(rostest REQUIRED)
   foreach(T
@@ -269,7 +271,7 @@ if(CATKIN_ENABLE_TESTING)
     )
     add_rostest(${T})
   endforeach()
-  
+
   ## Unit
   include_directories(src)
   catkin_add_gtest(unit_test

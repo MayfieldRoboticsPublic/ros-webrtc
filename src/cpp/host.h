@@ -13,6 +13,7 @@
 #include <ros_webrtc/GetPeerConnection.h>
 #include <ros_webrtc/RotateVideoSource.h>
 #include <ros_webrtc/SendData.h>
+#include <ros_webrtc/SetIceServers.h>
 #include <ros_webrtc/SetRemoteDescription.h>
 #include <webrtc/api/peerconnectioninterface.h>
 
@@ -102,7 +103,7 @@ public:
         const MediaConstraints& pc_constraints,
         double pc_bond_connect_timeout,
         double pc_bond_heartbeat_timeout,
-        const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers,
+        const std::vector<webrtc::PeerConnectionInterface::IceServer>& default_ice_servers,
         const QueueSizes& queue_sizes);
 
     Host(const Host& other);
@@ -174,6 +175,10 @@ private:
         bool get_peer_connection(ros::ServiceEvent<ros_webrtc::GetPeerConnection::Request, ros_webrtc::GetPeerConnection::Response>& event);
 
         bool send_data(ros::ServiceEvent<ros_webrtc::SendData::Request, ros_webrtc::SendData::Response>& event);
+
+        bool set_ice_servers(
+                ros::ServiceEvent<ros_webrtc::SetIceServers::Request,
+                ros_webrtc::SetIceServers::Response>& event);
 
         bool set_remote_description(ros::ServiceEvent<ros_webrtc::SetRemoteDescription::Request, ros_webrtc::SetRemoteDescription::Response>& event);
 
@@ -273,6 +278,9 @@ private:
 
     double _pc_bond_heartbeat_timeout;
 
+    std::vector<webrtc::PeerConnectionInterface::IceServer>
+            _default_ice_servers;
+
     std::vector<webrtc::PeerConnectionInterface::IceServer> _ice_servers;
 
     QueueSizes _queue_sizes;
@@ -312,7 +320,7 @@ struct HostFactory {
 
     MediaConstraints pc_constraints;
 
-    std::vector<webrtc::PeerConnectionInterface::IceServer> ice_servers;
+    std::vector<webrtc::PeerConnectionInterface::IceServer> default_ice_servers;
 
     QueueSizes queue_sizes;
 };

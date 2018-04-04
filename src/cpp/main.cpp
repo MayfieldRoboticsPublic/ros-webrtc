@@ -124,8 +124,9 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i != config.cameras.size(); i++) {
         host_factory.video_srcs.push_back(config.cameras[i]);
     }
-    for (size_t i = 0; i != config.ice_servers.size(); i++) {
-        host_factory.ice_servers.push_back(config.ice_servers[i]);
+    for (size_t i = 0; i != config.default_ice_servers.size(); i++) {
+        host_factory.default_ice_servers.push_back(
+                config.default_ice_servers[i]);
     }
     host_factory.pc_constraints = config.pc_constraints;
     host_factory.pc_bond_connect_timeout = config.pc_bond_connect_timeout;

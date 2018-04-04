@@ -5,6 +5,8 @@ import weakref
 
 import rospy
 
+import ros_webrtc.srv
+
 from ros_webrtc.peer_connection import (
     RTCPeerConnection,
     RTCPeerConnectionCallbacks,
@@ -161,6 +163,10 @@ class Application(object):
             pc.delete()
         for srv in self.svrs:
             srv.shutdown()
+
+    def set_ice_servers(self, **kwargs):
+        svc = rospy.ServiceProxy(ros_webrtc.srv.SetIceServers)
+        return svc(kwargs)
 
     def create_pc(self, session_id, peer_id, **kwargs):
         key = (session_id, peer_id)
