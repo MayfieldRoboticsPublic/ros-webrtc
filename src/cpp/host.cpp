@@ -766,6 +766,7 @@ bool Host::Service::set_ice_servers(
 
     for (auto i = 0; i < req.ice_servers.size(); i++) {
         webrtc::PeerConnectionInterface::IceServer server;
+        ROS_DEBUG("Adding ice server %s", server.uri.c_str());
         server.uri = req.ice_servers[i].uri;
         server.username = req.ice_servers[i].username;
         server.password = req.ice_servers[i].password;
