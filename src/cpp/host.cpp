@@ -81,6 +81,7 @@ Host::Host(
     _pc_bond_connect_timeout(pc_bond_connect_timeout),
     _pc_bond_heartbeat_timeout(pc_bond_heartbeat_timeout),
     _default_ice_servers(default_ice_servers),
+    _ice_servers(default_ice_servers),
     _queue_sizes(queue_sizes),
     _srv(*this),
     _auto_close_media(false) {
