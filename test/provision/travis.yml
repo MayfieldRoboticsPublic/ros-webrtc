@@ -38,7 +38,7 @@
   roles:
   - {role: chrome, become: yes}
   - {role: chrome-driver, become: yes}
-  - nodejs
+  - {role: nodejs, become: yes}
   - {role: webrtc, become: yes}
   - {role: ros, become: yes}
   - ros-webrtc
