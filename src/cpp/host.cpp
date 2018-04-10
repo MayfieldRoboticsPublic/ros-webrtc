@@ -71,7 +71,7 @@ Host::Host(
     const MediaConstraints& pc_constraints,
     double pc_bond_connect_timeout,
     double pc_bond_heartbeat_timeout,
-    const std::vector<webrtc::PeerConnectionInterface::IceServer>& ice_servers,
+    const std::vector<webrtc::PeerConnectionInterface::IceServer>& default_ice_servers,
     const QueueSizes& queue_sizes) :
     _nh(nh),
     _video_srcs(video_srcs),
@@ -80,7 +80,8 @@ Host::Host(
     _pc_constraints(pc_constraints),
     _pc_bond_connect_timeout(pc_bond_connect_timeout),
     _pc_bond_heartbeat_timeout(pc_bond_heartbeat_timeout),
-    _ice_servers(ice_servers),
+    _default_ice_servers(default_ice_servers),
+    _ice_servers(default_ice_servers),
     _queue_sizes(queue_sizes),
     _srv(*this),
     _auto_close_media(false) {
@@ -93,6 +94,7 @@ Host::Host(const Host& other) :
     _pc_constraints(other._pc_constraints),
     _pc_bond_connect_timeout(other._pc_bond_connect_timeout),
     _pc_bond_heartbeat_timeout(other._pc_bond_heartbeat_timeout),
+    _default_ice_servers(other._default_ice_servers),
     _ice_servers(other._ice_servers),
     _queue_sizes(other._queue_sizes),
     _srv(*this),
@@ -587,6 +589,7 @@ void Host::Service::advertise() {
     _srvs.push_back(_instance._nh.advertiseService("get_host", &Host::Service::get_host, this));
     _srvs.push_back(_instance._nh.advertiseService("get_peer_connection", &Host::Service::get_peer_connection, this));
     _srvs.push_back(_instance._nh.advertiseService("send_data", &Host::Service::send_data, this));
+    _srvs.push_back(_instance._nh.advertiseService("set_ice_servers", &Host::Service::set_ice_servers, this));
     _srvs.push_back(_instance._nh.advertiseService("set_remote_description", &Host::Service::set_remote_description, this));
     _srvs.push_back(_instance._nh.advertiseService("rotate_video_source", &Host::Service::rotate_video_source, this));
 }
@@ -755,6 +758,24 @@ bool Host::Service::send_data(ros::ServiceEvent<ros_webrtc::SendData::Request, r
     return true;
 }
 
+bool Host::Service::set_ice_servers(
+        ros::ServiceEvent<ros_webrtc::SetIceServers::Request,
+        ros_webrtc::SetIceServers::Response>& event) {
+    const auto& req = event.getRequest();
+    _instance._ice_servers = _instance._default_ice_servers;
+
+    for (auto i = 0; i < req.ice_servers.size(); i++) {
+        webrtc::PeerConnectionInterface::IceServer server;
+        server.uri = req.ice_servers[i].uri;
+        server.username = req.ice_servers[i].username;
+        server.password = req.ice_servers[i].password;
+        ROS_DEBUG("Adding ice server %s", server.uri.c_str());
+        _instance._ice_servers.push_back(server);
+
+    }
+    return true;
+}
+
 bool Host::Service::set_remote_description(ros::ServiceEvent<ros_webrtc::SetRemoteDescription::Request, ros_webrtc::SetRemoteDescription::Response>& event) {
     const auto& req = event.getRequest();
     PeerConnectionKey key = {req.session_id, req.peer_id};
@@ -886,7 +907,7 @@ Host HostFactory::operator()(ros::NodeHandle &nh) {
         pc_constraints,
         pc_bond_connect_timeout,
         pc_bond_heartbeat_timeout,
-        ice_servers,
+        default_ice_servers,
         queue_sizes
     );
 }

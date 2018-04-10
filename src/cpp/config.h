@@ -81,7 +81,7 @@ public:
 
     typedef webrtc::PeerConnectionInterface::IceServers IceServers;
 
-    IceServers ice_servers; /*! Servers to use for ICE. */
+    IceServers default_ice_servers; /*! Servers to use for ICE. */
 
     double flush_frequency; /*! Number of seconds between host/session flushes. */
 

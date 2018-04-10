@@ -124,6 +124,7 @@ class RTCPeerConnection(object):
                 ('add_ice_candidate', ros_webrtc.srv.AddIceCandidate),
                 ('create_offer', ros_webrtc.srv.CreateOffer),
                 ('create_data_channel', ros_webrtc.srv.CreateDataChannel),
+                ('set_ice_servers', ros_webrtc.srv.SetIceServers),
                 ('set_remote_description', ros_webrtc.srv.SetRemoteDescription),
             ]
         ])
