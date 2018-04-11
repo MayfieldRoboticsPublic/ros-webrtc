@@ -7,6 +7,8 @@ import rospy
 
 import ros_webrtc.srv
 
+from ros_webrtc import join_ros_names
+from ros_webrtc.msg import IceServer
 from ros_webrtc.peer_connection import (
     RTCPeerConnection,
     RTCPeerConnectionCallbacks,
@@ -164,9 +166,21 @@ class Application(object):
         for srv in self.svrs:
             srv.shutdown()
 
-    def set_ice_servers(self, **kwargs):
-        svc = rospy.ServiceProxy(ros_webrtc.srv.SetIceServers)
-        return svc(kwargs)
+    def set_ice_servers(self, ice_servers):
+        valid_servers = []
+        for server in ice_servers:
+            if all(k in server for k in ('uri', 'username', 'password')):
+                valid_servers.append(
+                    IceServer(uri=server['uri'],
+                              username=server['username'],
+                              password=server['password'])
+                )
+        svc = rospy.ServiceProxy(
+            join_ros_names(self.ros_webrtc_namespace, 'set_ice_servers'),
+            ros_webrtc.srv.SetIceServers
+        )
+        rospy.loginfo("Setting ice servers: {}".format(valid_servers))
+        return svc(valid_servers)
 
     def create_pc(self, session_id, peer_id, **kwargs):
         key = (session_id, peer_id)
