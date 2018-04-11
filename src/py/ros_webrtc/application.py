@@ -181,8 +181,8 @@ class Application(object):
                 )
 
         if not valid_servers:
-            rospy.logerror("No properly formatted ice servers found in {}".
-                           format(ice_servers))
+            rospy.logerr("No properly formatted ice servers found in {}".
+                         format(ice_servers))
             return
 
         svc = rospy.ServiceProxy(
