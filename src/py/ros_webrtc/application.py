@@ -172,13 +172,12 @@ class Application(object):
             if 'uri' not in server:
                 continue
 
-            if 'stun' in server['uri']:
-                valid_servers.append(IceServer(uri=server['uri']))
-            elif all(k in server for k in ('username', 'password')):
+            if 'stun' in server['uri'] or \
+                    all(k in server for k in ('username', 'password')):
                 valid_servers.append(
                     IceServer(uri=server['uri'],
-                              username=server['username'],
-                              password=server['password'])
+                              username=server.get('username', ''),
+                              password=server.get('password', ''))
                 )
 
         if not valid_servers:
