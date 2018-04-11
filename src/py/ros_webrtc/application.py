@@ -7,6 +7,8 @@ import rospy
 
 import ros_webrtc.srv
 
+from ros_webrtc import join_ros_names
+from ros_webrtc.msg import IceServer
 from ros_webrtc.peer_connection import (
     RTCPeerConnection,
     RTCPeerConnectionCallbacks,
@@ -157,6 +159,10 @@ class Application(object):
         self.ros_webrtc_namespace = ros_webrtc_namespace
         self.pc_connect_timeout = pc_connect_timeout
         self.pc_heartbeat_timeout = pc_heartbeat_timeout
+        self.ice_server_svc = rospy.ServiceProxy(
+            join_ros_names(self.ros_webrtc_namespace, 'set_ice_servers'),
+            ros_webrtc.srv.SetIceServers
+        )
 
     def shutdown(self):
         for pc in self.pcs.values():
@@ -164,9 +170,27 @@ class Application(object):
         for srv in self.svrs:
             srv.shutdown()
 
-    def set_ice_servers(self, **kwargs):
-        svc = rospy.ServiceProxy(ros_webrtc.srv.SetIceServers)
-        return svc(kwargs)
+    def set_ice_servers(self, ice_servers):
+        valid_servers = []
+        for server in ice_servers:
+            if 'uri' not in server:
+                continue
+
+            if 'stun' in server['uri'] or \
+                    ('username' in server and 'password' in server):
+                valid_servers.append(
+                    IceServer(uri=server['uri'],
+                              username=server.get('username', ''),
+                              password=server.get('password', ''))
+                )
+
+        if not valid_servers:
+            rospy.logerr("No properly formatted ice servers found in {}".
+                         format(ice_servers))
+            return
+
+        rospy.loginfo("Setting ice servers: {}".format(valid_servers))
+        return self.ice_server_svc(valid_servers)
 
     def create_pc(self, session_id, peer_id, **kwargs):
         key = (session_id, peer_id)
