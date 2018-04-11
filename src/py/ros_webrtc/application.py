@@ -177,7 +177,7 @@ class Application(object):
                 continue
 
             if 'stun' in server['uri'] or \
-                    all(k in server for k in ('username', 'password')):
+                    ('username' in server and 'password' in server):
                 valid_servers.append(
                     IceServer(uri=server['uri'],
                               username=server.get('username', ''),
