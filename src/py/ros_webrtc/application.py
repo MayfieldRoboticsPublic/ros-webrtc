@@ -169,12 +169,18 @@ class Application(object):
     def set_ice_servers(self, ice_servers):
         valid_servers = []
         for server in ice_servers:
-            if all(k in server for k in ('uri', 'username', 'password')):
+            if 'uri' not in server:
+                continue
+
+            if 'stun' in server['uri']:
+                valid_servers.append(IceServer(uri=server['uri']))
+            elif all(k in server for k in ('username', 'password')):
                 valid_servers.append(
                     IceServer(uri=server['uri'],
                               username=server['username'],
                               password=server['password'])
                 )
+
         if not valid_servers:
             rospy.logerror("No properly formatted ice servers found in {}".
                            format(ice_servers))
