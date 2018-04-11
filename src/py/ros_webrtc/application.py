@@ -175,6 +175,11 @@ class Application(object):
                               username=server['username'],
                               password=server['password'])
                 )
+        if not valid_servers:
+            rospy.logerror("No properly formatted ice servers found in {}".
+                           format(ice_servers))
+            return
+
         svc = rospy.ServiceProxy(
             join_ros_names(self.ros_webrtc_namespace, 'set_ice_servers'),
             ros_webrtc.srv.SetIceServers
