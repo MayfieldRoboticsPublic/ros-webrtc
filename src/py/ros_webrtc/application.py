@@ -159,6 +159,10 @@ class Application(object):
         self.ros_webrtc_namespace = ros_webrtc_namespace
         self.pc_connect_timeout = pc_connect_timeout
         self.pc_heartbeat_timeout = pc_heartbeat_timeout
+        self.ice_server_svc = rospy.ServiceProxy(
+            join_ros_names(self.ros_webrtc_namespace, 'set_ice_servers'),
+            ros_webrtc.srv.SetIceServers
+        )
 
     def shutdown(self):
         for pc in self.pcs.values():
@@ -185,12 +189,8 @@ class Application(object):
                          format(ice_servers))
             return
 
-        svc = rospy.ServiceProxy(
-            join_ros_names(self.ros_webrtc_namespace, 'set_ice_servers'),
-            ros_webrtc.srv.SetIceServers
-        )
         rospy.loginfo("Setting ice servers: {}".format(valid_servers))
-        return svc(valid_servers)
+        return self.ice_server_svc(valid_servers)
 
     def create_pc(self, session_id, peer_id, **kwargs):
         key = (session_id, peer_id)
