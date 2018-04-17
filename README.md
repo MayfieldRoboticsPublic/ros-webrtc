@@ -1,6 +1,6 @@
-# ros-webrtc [![Build Status](https://travis-ci.org/mayfieldrobotics/ros-webrtc.svg?branch=develop)](https://travis-ci.org/mayfieldrobotics/ros-webrtc) [![codecov](https://codecov.io/gh/mayfieldrobotics/ros-webrtc/branch/develop/graph/badge.svg)](https://codecov.io/gh/mayfieldrobotics/ros-webrtc)
+# ros-webrtc [![Build Status](https://travis-ci.org/MayfieldRoboticsPublic/ros-webrtc.svg?branch=develop)](https://travis-ci.org/MayfieldRoboticsPublic/ros-webrtc) [![codecov](https://codecov.io/gh/MayfieldRoboticsPublic/ros-webrtc/branch/develop/graph/badge.svg)](https://codecov.io/gh/MayfieldRoboticsPublic/ros-webrtc)
 
-Exposes [Google's implementation](https://code.google.com/p/libjingle/) of
+Exposes [Google's implementation](https://webrtc.googlesource.com/src) of
 [WebRTC](http://www.webrtc.org/) to ROS. It consists of 2 ROS nodes:
 
 * `ros_webrtc_host`
@@ -19,7 +19,7 @@ which show how everything fits together.
 Get it:
 
 ```bash
-~/code$ git clone git@github.com:mayfieldrobotics/ros-webrtc.git
+~/code$ git clone git@github.com:MayfieldRoboticsPublic/ros-webrtc.git
 ```
 
 generate a project if you want, e.g. for Eclipse CDT do:
@@ -99,8 +99,8 @@ This all leaves you with a few `ros_webrtc` nodes:
 
 ### /ros_webrtc/host
 
-This `ros_webrtc_host` instance exposes a [build](https://github.com/mayfieldrobotics/webrtc-build)
-of [Google's implementation](https://code.google.com/p/libjingle/) of WebRTC to
+This `ros_webrtc_host` instance exposes a build
+of [Google's implementation](https://webrtc.googlesource.com/src) of WebRTC to
 ROS using an interface similar to [the one exposed to browsers](https://developer.mozilla.org/en-US/docs/Web/Guide/API/WebRTC).
 
 So to e.g. create an [RTCPeerConnection](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection)
@@ -153,13 +153,13 @@ has no knowledge of signaling, neither does `ros_webrtc_host`.
 A `ros_webrtc_example` ROS node intended to show how ROS WebRTC app *might*
 be implemented using helpers from the `ros_webrtc` Python library.
 
-It connects to [signaling](#ros_webrtcsignaling) and can be *called* by another peer. In
+It connects to [signaling](#ros_webrtc_examplesignaling) and can be *called* by another peer. In
 that case a signaling message will be **received** from the other peer via
-[signaling](#ros_webrtcsignaling).
+[signaling](#ros_webrtc_examplesignaling).
 
 Alternatively `ros_webrtc_example` can *call* another peer. In that case
 signaling message will be **sent** from the other peer via
-[signaling](#ros_webrtcsignaling).
+[signaling](#ros_webrtc_examplesignaling).
 
 ### /ros_webrtc/rosbridge_*
 
@@ -199,8 +199,8 @@ Once the connection is established `ros_webrtc_host` will list it:
 ```bash
 ~/tmp/ros-webrtc-ws$ rosservice call /ros_webrtc/get_host
 ...
-peer_connections: 
-  - 
+peer_connections:
+  -
     session_id: 9eb17a42bbf947649f3b92f24fc7b88c
     peer_id: cd0bdd0b147c4ba4bea16ca3cb35c140
 ...
@@ -208,7 +208,7 @@ peer_connections:
 
 Notice that a peer connection is identified by **2** values:
 
-* a `session_id` and 
+* a `session_id` and
 * a `peer_id`
 
 We also have a new `ros_webrtc_rosbridge` node instance:
@@ -315,7 +315,7 @@ fields:
 * `publish` - optional - boolean controlling whether images from this source
   should be published.
 
-See [Google's source](https://chromium.googlesource.com/external/webrtc/+/master/webrtc/api/mediaconstraintsinterface.cc)
+See [Google's source](https://webrtc.googlesource.com/src/+/master/api/mediaconstraintsinterface.cc)
 for possible `constraints`. In the e.g. above we constrained the `webcam`
 source to have size `640x480`.
 
@@ -343,11 +343,11 @@ Each is a mapping with fields:
 
 ## trace
 
-A mapping with these fields controlling [libjingle](https://code.google.com/p/libjingle/)
+A mapping with these fields controlling [WebRTC](https://webrtc.googlesource.com/src)
 tracing:
 
 * `file` - path to file where traces should be written.
-* `filter` - optional - either a sequence of strings or a single string of [trace levels] (https://chromium.googlesource.com/external/webrtc/+/master/webrtc/common_types.h) used to build a filter. In the e.g. above `all`
+* `filter` - optional - either a sequence of strings or a single string of [trace levels](https://webrtc.googlesource.com/src/+/master/common_types.h) used to build a filter. In the e.g. above `all`
    traces have been included.
 
 ## queue_sizes
@@ -369,7 +369,7 @@ closed *out-of-band*.
 ### peer_connection/constraint
 
 This is a nested mapping of `mandatory` and `optional` **string** constraints
-to apply to each peer connection. See [Google's source](https://chromium.googlesource.com/external/webrtc/+/master/webrtc/api/mediaconstraintsinterface.cc) for possible `constraints`. In the e.g. above we
+to apply to each peer connection. See [Google's source](https://webrtc.googlesource.com/src/+/master/api/mediaconstraintsinterface.cc) for possible `constraints`. In the e.g. above we
 constrained peer connections to optionally enable [DTLS-SRTP for key management](https://webrtchacks.com/webrtc-must-implement-dtls-srtp-but-must-not-implement-sdes/).
 
 ### open_media_sources
